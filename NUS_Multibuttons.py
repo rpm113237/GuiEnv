@@ -1,0 +1,378 @@
+import asyncio
+import tkinter as tk
+from tkinter import ttk, messagebox
+from bleak import BleakScanner, BleakClient
+import serial
+
+# Standard Nordic UART Service (NUS) UUIDs
+NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # Notify
+NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # Write
+
+TARGET_DEVICE_NAME = "Squeezer"
+
+
+class MultiSendNusApp(tk.Tk):
+
+    def __init__(self):
+        super().__init__()
+        self.title("Macro Button Squeezer GUI")
+        self.geometry("640x1200")
+        self.style=ttk.Style(self)
+        self.style.theme_use('clam')
+        
+        #mess with styles;
+        self.style.configure('TButton', background = 'ivory', foreground='indigo', font =('Helvetica',12,'bold'))
+        self.style.configure('TLabel', background = 'light blue', foreground='magenta',font =('Helvetica',12,'bold'))
+        self.style.configure('TLabelFrame', relief='raised', borderwidth =5)
+        self.style.configure("Warning.TButton", foreground = 'red', background='light blue', font=('Helvetica',16,'bold'))
+
+        self.is_running = True
+        self.client = None
+        # Get the currently active theme name
+#         print("Active theme:", self.style.theme_use())
+
+        
+        # Track all dynamically generated preset buttons for mass state tracking
+        self.macro_buttons = []
+
+        self.protocol("WM_DELETE_WINDOW", self.close_application)
+        self.build_ui()
+
+    def build_ui(self):
+        """Builds terminal interface with a macro send frame."""
+#         print("Available themes:", self.style.theme_names())
+        
+        # --- 1. Connection Controls Panel ---
+        top_frame = ttk.Frame(self, relief='raised', borderwidth = 5)        
+        top_frame.pack(fill=tk.X,padx=10, pady=10)
+        top_frame.columnconfigure(0, weight=1)
+        top_frame.columnconfigure(1, weight=1)
+        top_frame.columnconfigure(2, weight=1)
+
+        self.status_lbl = ttk.Label(top_frame, text="Disconnected")
+        self.status_lbl.grid(row=0, column=0, sticky ='n')
+        
+        self.scan_btn = ttk.Button(top_frame,text="Connect",
+            command=lambda: asyncio.create_task(self.connect_nus_device())    )
+        #self.scan_btn.pack(side=tk.TOP, anchor='w',)
+        self.scan_btn.grid(row=1, column=0, sticky ='n')
+        
+        self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED,
+            command=lambda: asyncio.create_task(self.disconnect_nus())  )
+#         self.disconnect_btn.pack(side=tk.TOP, anchor='w')
+        self.disconnect_btn.grid(row=2, column=0, sticky ='n')
+        
+        self.mac_lbl = ttk.Label(top_frame, text="00:00:00:00:00:00")
+        self.mac_lbl.grid(row=3, column=0, sticky ='n')
+        
+        self.HWID_lbl = ttk.Label(top_frame, text="HWID")
+        self.HWID_lbl.grid(row=0, column=1, sticky ='n')
+        
+        self.SWRev_lbl = ttk.Label(top_frame, text="SW Rev")
+        self.SWRev_lbl.grid(row=1, column=1, sticky ='n')
+        
+        self.BatVolts_lbl = ttk.Label(top_frame, text="BattVolts:---")
+        self.BatVolts_lbl.grid(row=2, column=1, sticky ='n')
+        
+        self.BatPcnt_lbl = ttk.Label(top_frame, text="BattPcnt:---")
+        self.BatPcnt_lbl.grid(row=3, column=1, sticky ='n')
+               
+        self.HF_lbl = ttk.Label(top_frame, text="HF:NN.MM", font=("Helvetica", 11, "bold"))
+#         self.HF_lbl.pack(side=tk.TOP, anchor='n',padx=(10,0),pady=5)
+        self.HF_lbl.grid(row=0, column=2, sticky ='n')
+           
+
+        
+
+        
+        
+        #2a------ Terminal Frame
+
+        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", relief ='raised', borderwidth=5)
+        middle_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
+
+        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=5,
+                                fg="#00ff00", font=("Consolas", 10, 'bold'))
+        self.terminal.pack(padx=5, pady=5)
+        
+        #2b-----calib frame
+        
+        calib_frame = ttk.LabelFrame(self, text=" Calibration Data ", relief ='raised', borderwidth=5)
+        calib_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
+#         self.calib_lbl = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED, bg="light blue", relief="raised", bd=5,
+#                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
+#         self.calib_lbl.pack(padx=5, pady=5)
+        self.CalCk_lbl = tk.Label(calib_frame, text="UnCalibrated", fg='white', bg = 'red')
+        self.CalCk_lbl.pack()
+
+
+        calibhdr_frame = ttk.Frame(calib_frame, relief='raised', borderwidth = 5)        
+        calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
+        
+        self.calibstart_lbl=tk.Label(calibhdr_frame, text="Start\n(lbs)", bg='pink',fg='blue')
+        self.calibstart_lbl.pack(side =tk.LEFT)
+        self.calibstart_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 16, "bold"))
+        self.calibstart_ent.insert(0,'10')
+        self.calibstart_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calibstep_lbl=tk.Label(calibhdr_frame, text="Step\n(lbs)", bg='pink',fg='blue')
+        self.calibstep_lbl.pack(side =tk.LEFT)
+        self.calibstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
+        self.calibstep_ent.insert(0,'20')
+        self.calibstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calibnumstep_lbl=tk.Label(calibhdr_frame, text="Num\nSteps", bg='pink',fg='blue')
+        self.calibnumstep_lbl.pack(side =tk.LEFT)
+        self.calibnumstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
+        self.calibnumstep_ent.insert(0,'6')
+        self.calibnumstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calib_doit_btn = ttk.Button(
+            calibhdr_frame,
+            style="Warning.TButton",
+            text="Do It",
+            #command=lambda: asyncio.create_task(self.connect_nus_device()),
+            command= lambda: print('Do It(TODO)'))        
+        self.calib_doit_btn.pack(side=tk.RIGHT, padx=5)
+        
+        self.calib_ckcal_btn = ttk.Button(
+            calibhdr_frame,
+#             style="Warning.TButton",
+            text="Check\nCal",
+            #command=lambda: asyncio.create_task(self.connect_nus_device()),
+            command= lambda: print('check calibration (TODO)'))        
+        self.calib_ckcal_btn.pack(side=tk.RIGHT, padx=5)
+        
+        
+        
+        calibdata_frame = ttk.Frame(calib_frame, relief='raised', borderwidth = 5)        
+        calibdata_frame.pack(fill=tk.BOTH,padx=10, pady=10)
+        
+                # 2. Define Columns
+        # Use internal IDs for code management
+        columns = ("CalTgt", "HFVal", "Factor", "SFVal")
+
+        # 3. Create Treeview Widget
+        # "show='headings'" hides the default hierarchical first column (tree arrow)
+        table = ttk.Treeview(calibdata_frame, columns=columns, show="headings", selectmode="browse")
+
+        # 4. Define Headings (What the user sees at the top)
+        table.heading("CalTgt", text="Cal Tgt")
+        table.heading("HFVal", text="HF Val")
+        table.heading("Factor", text="Factor")
+        table.heading("SFVal", text="Scale Val")
+
+        # 5. Define Column Properties
+        # anchor="w" aligns text left (West), "center" aligns center
+        table.column("CalTgt", width=50, minwidth=50, anchor="center")
+        table.column("HFVal", width=150, minwidth=100, anchor="w")
+        table.column("Factor", width=150, minwidth=100, anchor="w")
+        table.column("SFVal", width=100, minwidth=80, anchor="center")
+                
+
+        # 6. Add Sample Data
+        # Use an empty string '' as the first argument because we aren't nesting items
+        data = [
+            ("10.0", "9.9", "10000", "----"),
+            ("30.0", "30.1", "10001", "----"),
+            ("50.0", "50.2", "10002", "----"),
+            ("70.0", "69.8", "10003", "----"),
+        ]
+
+        for row in data:
+            table.insert("", tk.END, values=row)
+
+        # 7. Add a Scrollbar
+        scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=table.yview)
+        table.configure(yscrollcommand=scrollbar.set)
+
+        # 8. Pack layout elements
+        table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+
+        
+#         self.calibdata_txt = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED,height=15, bg='ivory', relief="raised", bd=5,
+#                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
+#         self.calibdata_txt.pack(padx=5, pady=5)
+        
+        
+        
+        
+
+
+
+
+        # --- 3. MULTIPLE SEND BUTTONS PANEL (Macros) ---
+        macro_frame = ttk.LabelFrame(self,  text=" Macro Commands ")
+        macro_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # Mapping: {"Button Label": "Data to Send"}
+        presets = {
+            "Batt %": "bp:?",
+            "OFF": "X:",
+            "Cal ?": "C:?",
+            "Good Bye": "Adios",
+            "How Many":"17",
+            "What Now":"who knows"
+        }
+
+        # Dynamically loop and instantiate macro buttons
+        for label, command_string in presets.items():
+            btn = ttk.Button(
+                macro_frame,
+                text=label,
+#                 background='light blue', fg='red',
+                state=tk.DISABLED,
+                # Pass the unique command payload through lambda into our scheduler
+                command=lambda cmd=command_string: asyncio.create_task(self.send_payload(cmd)),
+            )
+            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=8)
+#             print(f'button {label}, command {command_string} being appended = {btn}')
+            self.macro_buttons.append(btn)
+
+        # --- 4. Manual Transmit Panel ---
+        bottom_frame = ttk.LabelFrame(self, text=" Manual Custom Send (RX) ")
+        bottom_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        self.input_entry = ttk.Entry(bottom_frame)
+        self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        self.input_entry.bind("<Return>", lambda event: asyncio.create_task(self.send_manual_input()))
+
+        self.send_btn = ttk.Button(
+            bottom_frame,
+            text="Send String",
+            state=tk.DISABLED,
+            command=lambda: asyncio.create_task(self.send_manual_input()),
+        )
+        self.send_btn.pack(side=tk.RIGHT, padx=5, pady=5)
+
+    def log_to_terminal(self, text: str):
+        self.terminal.config(state=tk.NORMAL)
+        self.terminal.insert(tk.END, text + "\n")
+        self.terminal.see(tk.END)
+        self.terminal.config(state=tk.DISABLED)
+
+    def set_widgets_state(self, state):
+        """Toggles operational state across manual entry and macro lists cleanly."""
+        self.send_btn.config(state=state)
+#         print(f" macrobuttons ={self.macro_buttons}")
+        for btn in self.macro_buttons:
+            btn.config(state=state)
+
+    async def connect_nus_device(self):
+        self.scan_btn.config(state=tk.DISABLED)
+        self.log_to_terminal(f"[SYS] Scanning for '{TARGET_DEVICE_NAME}'...")
+
+        try:
+            device = await BleakScanner.find_device_by_filter(
+                lambda d, ad: d.name == TARGET_DEVICE_NAME or TARGET_DEVICE_NAME in (d.name or "")
+            )
+
+            if not device:
+                self.log_to_terminal("[SYS] Error: NUS device not found.")
+                self.scan_btn.config(state=tk.NORMAL)
+                return
+
+            self.log_to_terminal(f"[SYS] Connecting to {device.address}...")
+            self.mac_lbl.configure(text=device.address)
+            self.client = BleakClient(device, disconnected_callback=self.on_nus_disconnect)
+            await self.client.connect()
+
+            self.status_lbl.config(text="Connected ✅")
+            self.log_to_terminal("[SYS] Connected. Activating Streams...")
+
+            await self.client.start_notify(NUS_TX_UUID, self.nus_notification_handler)
+            
+            self.disconnect_btn.config(state=tk.NORMAL)
+            self.set_widgets_state(tk.NORMAL)  # Wake up all buttons
+
+        except Exception as e:
+            messagebox.showerror("NUS Connection Error", str(e))
+            self.scan_btn.config(state=tk.NORMAL)
+
+    def nus_notification_handler(self, sender, data: bytearray):
+        try:
+            decoded_text = data.decode("utf-8").strip()
+            SQzrlist=decoded_text.split(':')
+            if SQzrlist[0]=='HF':
+               self.HF_lbl.config(text=decoded_text)
+            else:
+               self.log_to_terminal(f"[RX]: {decoded_text}")
+        except UnicodeDecodeError:
+            self.log_to_terminal(f"[RX Hex]: {data.hex().upper()}")
+#         print(' notification handler, can we do stuff here?')            
+
+    async def send_payload(self, text_payload: str):
+        """Core async transmit pipeline utilized by both manual text entry and macro triggers."""
+        if not self.client or not self.client.is_connected:
+            return
+
+        try:
+            # Append standard serial termination characters
+            encoded = (text_payload + "\r\n").encode("utf-8")
+            print(f'encoded in send_payload ={encoded}')
+            await self.client.write_gatt_char(NUS_RX_UUID, encoded, response=False)
+#             print("In send payload got here???")
+            self.log_to_terminal(f"[TX]: {text_payload}")
+#             print("in send payload, after log to terminal")
+        except Exception as e:
+            self.log_to_terminal(f"[SYS ERROR]: Failed payload write: {e}")
+
+    async def send_manual_input(self):
+        """Extracts text out of input bar and routes it directly to send_payload."""
+        payload_string = self.input_entry.get()
+        if not payload_string:
+            return
+        
+        await self.send_payload(payload_string)
+        self.input_entry.delete(0, tk.END)
+
+    def on_nus_disconnect(self, client):
+        self.status_lbl.config(text="Disconnected ❌")
+        self.mac_lbl.configure(text="00:00:00:00:00:00")
+        self.HF_lbl.configure(text="HF:--.--")
+        self.log_to_terminal("[SYS] BLE Disconnected")
+        self.scan_btn.config(state=tk.NORMAL)
+        self.disconnect_btn.config(state=tk.DISABLED)
+        self.set_widgets_state(tk.DISABLED)  # Gray out all macros
+
+    async def disconnect_nus(self):
+        if self.client and self.client.is_connected:
+            await self.client.stop_notify(NUS_TX_UUID)
+            await self.client.disconnect()
+        self.on_nus_disconnect(None)
+
+    def close_application(self):
+        self.is_running = False
+        if self.client and self.client.is_connected:
+            print('application closed')
+            asyncio.create_task(self.send_payload('X:'))
+#         self.send_payload('X:')
+#         asyncio.create_task(self.disconnect_nus())
+        self.destroy()
+
+
+class AsyncLoopEngine:
+    @staticmethod
+    async def run_application():
+        print("are we here?")
+        app = MultiSendNusApp()
+#         app.macro_buttons[1].invoke()
+        while app.is_running:
+            try:
+                app.update()
+                app.input_entry.delete(0,tk.END)
+                app.input_entry.insert(0,"bp:?")
+                app.send_btn.invoke()
+                app.macro_buttons[1].invoke()
+#                 print(f"print HF = {app.HF_lbl['text']}") #(yes we can)
+#                 app.log_to_terminal("log to terminal")
+                await asyncio.sleep(1.02)
+            except tk.TclError:
+                break
+
+
+if __name__ == "__main__":
+    asyncio.run(AsyncLoopEngine.run_application())
