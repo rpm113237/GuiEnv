@@ -1,8 +1,10 @@
 import asyncio
 import tkinter as tk
 from tkinter import ttk, messagebox
+import tkinter.font as tkfont
 from bleak import BleakScanner, BleakClient
 import serial
+import random
 
 # Standard Nordic UART Service (NUS) UUIDs
 NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -10,22 +12,32 @@ NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # Notify
 NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # Write
 
 TARGET_DEVICE_NAME = "Squeezer"
-
-
 class MultiSendNusApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Macro Button Squeezer GUI")
-        self.geometry("640x1200")
-        self.style=ttk.Style(self)
+        self.title("NUS Controller with Macro Presets")
+        self.geometry("1000x1400")
+
+        self.is_running = True
+        self.client = None
+
+        self.style =ttk.Style(self)
         self.style.theme_use('clam')
         
         #mess with styles;
-        self.style.configure('TButton', background = 'ivory', foreground='indigo', font =('Helvetica',12,'bold'))
+        self.style.configure('TButton', background = 'ivory', width=0,foreground='indigo',padding=(0,5), borderwidth =3, font =('Helvetica',12,'bold'))
         self.style.configure('TLabel', background = 'light blue', foreground='magenta',font =('Helvetica',12,'bold'))
         self.style.configure('TLabelFrame', relief='raised', borderwidth =5)
+        self.style.configure("TFrame", background ='light blue', bordercolor='yellow',borderwidth = 50, relief='groove')
         self.style.configure("Warning.TButton", foreground = 'red', background='light blue', font=('Helvetica',16,'bold'))
+#      Configure the 'Treeview.Heading' style globally
+        self.style.configure("Treeview.Heading",background="light blue",foreground="green",font=("Helvetica", 11, "bold"))
+        # Configure the frame container style
+        self.style.configure("Custom.TLabelframe",background="#f0f0f0",bordercolor='red',borderwidth=2,relief="raised",)
+# Configure the title text inside the labelframe foreground="#2c3e50",
+        self.style.configure("Custom.TLabelframe.Label",background="#f0f0f0",foreground = 'magenta',font=("Helvetica", 16, "bold"),)
+
 
         self.is_running = True
         self.client = None
@@ -44,7 +56,7 @@ class MultiSendNusApp(tk.Tk):
 #         print("Available themes:", self.style.theme_names())
         
         # --- 1. Connection Controls Panel ---
-        top_frame = ttk.Frame(self, relief='raised', borderwidth = 5)        
+        top_frame = tk.Frame(self, relief='groove',highlightbackground="blue",highlightcolor="blue", highlightthickness=4,borderwidth = 5)        
         top_frame.pack(fill=tk.X,padx=10, pady=10)
         top_frame.columnconfigure(0, weight=1)
         top_frame.columnconfigure(1, weight=1)
@@ -89,17 +101,19 @@ class MultiSendNusApp(tk.Tk):
         
         #2a------ Terminal Frame
 
-        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", relief ='raised', borderwidth=5)
+        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", labelanchor = 'n',relief ='raised', borderwidth=15)
         middle_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
 
-        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=5,
+        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=15,
                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
-        self.terminal.pack(padx=5, pady=5)
+        self.terminal.pack(side = tk.LEFT,padx=5, pady=5)
         
         #2b-----calib frame
         
-        calib_frame = ttk.LabelFrame(self, text=" Calibration Data ", relief ='raised', borderwidth=5)
-        calib_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
+        calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
+        calib_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame = ttk.Frame(self, relief="sunken", borderwidth=45, width=200, height=10)
+        frame.pack(padx=20)
 #         self.calib_lbl = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED, bg="light blue", relief="raised", bd=5,
 #                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
 #         self.calib_lbl.pack(padx=5, pady=5)
@@ -107,7 +121,7 @@ class MultiSendNusApp(tk.Tk):
         self.CalCk_lbl.pack()
 
 
-        calibhdr_frame = ttk.Frame(calib_frame, relief='raised', borderwidth = 5)        
+        calibhdr_frame = ttk.Frame(calib_frame,relief ='raised',borderwidth=15)        
         calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
         
         self.calibstart_lbl=tk.Label(calibhdr_frame, text="Start\n(lbs)", bg='pink',fg='blue')
@@ -146,76 +160,65 @@ class MultiSendNusApp(tk.Tk):
         
         
         
-        calibdata_frame = ttk.Frame(calib_frame, relief='raised', borderwidth = 5)        
-        calibdata_frame.pack(fill=tk.BOTH,padx=10, pady=10)
+        calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
+        calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
         
                 # 2. Define Columns
-        # Use internal IDs for code management
-        columns = ("CalTgt", "HFVal", "Factor", "SFVal")
+        # Use internal IDs for code management; these do not have to be the text
+        columns = ("CalWt", "CalVal")
 
         # 3. Create Treeview Widget
         # "show='headings'" hides the default hierarchical first column (tree arrow)
         table = ttk.Treeview(calibdata_frame, columns=columns, show="headings", selectmode="browse")
+        sqfont= tkfont.Font(font="TkDefaultFont")
 
         # 4. Define Headings (What the user sees at the top)
-        table.heading("CalTgt", text="Cal Tgt")
-        table.heading("HFVal", text="HF Val")
-        table.heading("Factor", text="Factor")
-        table.heading("SFVal", text="Scale Val")
+        table.heading("CalWt", text="CalWt")
+        #table.heading("HFVal", text="HF Val")
+        table.heading("CalVal", text="CalVal")
+        #table.heading("SFVal", text="Scale Val")
 
         # 5. Define Column Properties
         # anchor="w" aligns text left (West), "center" aligns center
-        table.column("CalTgt", width=50, minwidth=50, anchor="center")
-        table.column("HFVal", width=150, minwidth=100, anchor="w")
-        table.column("Factor", width=150, minwidth=100, anchor="w")
-        table.column("SFVal", width=100, minwidth=80, anchor="center")
+        table.column("CalWt", width=sqfont.measure('123.456')+10, minwidth=1, anchor="center")
+#         table.column("CalWt", width=1, minwidth=1, anchor="center")
+        table.column("CalVal", width=sqfont.measure('12345.5678')+10, minwidth=1, anchor="center")
+        #table.column("SFVal", width=100, minwidth=80, anchor="center")
                 
 
-        # 6. Add Sample Data
-        # Use an empty string '' as the first argument because we aren't nesting items
-        data = [
-            ("10.0", "9.9", "10000", "----"),
-            ("30.0", "30.1", "10001", "----"),
-            ("50.0", "50.2", "10002", "----"),
-            ("70.0", "69.8", "10003", "----"),
-        ]
-
-        for row in data:
+        ncalpts=8
+        # Replace with your desired number of elements
+        data_list = [(str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
+        
+        for row in data_list:
             table.insert("", tk.END, values=row)
 
-        # 7. Add a Scrollbar
-        scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=table.yview)
-        table.configure(yscrollcommand=scrollbar.set)
+#         # 7. Add a Scrollbar
+#         scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=table.yview)
+#         table.configure(yscrollcommand=scrollbar.set)
 
         # 8. Pack layout elements
-        table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-
+        #table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+#         table.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+#         table.pack(side=tk.LEFT, expand=True)
+        table.grid(row=0, column=0, sticky = 'n')
+#         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.caldelta_lbl=tk.Label(calibdata_frame, text="Delta", bg='pink',fg='blue')
+        self.caldelta_lbl.grid(row = 1, column = 0, sticky = 'w')
         
-#         self.calibdata_txt = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED,height=15, bg='ivory', relief="raised", bd=5,
-#                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
-#         self.calibdata_txt.pack(padx=5, pady=5)
-        
-        
-        
-        
-
-
-
-
         # --- 3. MULTIPLE SEND BUTTONS PANEL (Macros) ---
         macro_frame = ttk.LabelFrame(self,  text=" Macro Commands ")
-        macro_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        macro_frame.pack(fill=tk.X, expand=True, padx=10, pady=5)
 
         # Mapping: {"Button Label": "Data to Send"}
         presets = {
             "Batt %": "bp:?",
-            "OFF": "X:",
-            "Cal ?": "C:?",
-            "Good Bye": "Adios",
-            "How Many":"17",
-            "What Now":"who knows"
+            'Batt V':'BV:?',
+            "TBD": "TBD:",
+            "Cal?": "C:?",
+            "HWID": "HW:?",
+            "SW Rev":"R:?",
+            "OFF":"X"
         }
 
         # Dynamically loop and instantiate macro buttons
@@ -228,7 +231,9 @@ class MultiSendNusApp(tk.Tk):
                 # Pass the unique command payload through lambda into our scheduler
                 command=lambda cmd=command_string: asyncio.create_task(self.send_payload(cmd)),
             )
-            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=8)
+#             btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=8)
+            #btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            btn.pack(side=tk.LEFT,expand=True)
 #             print(f'button {label}, command {command_string} being appended = {btn}')
             self.macro_buttons.append(btn)
 
@@ -287,6 +292,17 @@ class MultiSendNusApp(tk.Tk):
             
             self.disconnect_btn.config(state=tk.NORMAL)
             self.set_widgets_state(tk.NORMAL)  # Wake up all buttons
+            
+            #send wakeup stuff
+            await self.send_payload('HW:')	#HWID
+            await self.send_payload('R:')
+            await self.send_payload('BP:')
+            await self.send_payload('BV:')
+            await self.send_payload('C?:')
+#             await self.send_payload('HW:')
+#             await self.send_payload('HW:')
+#             await self.send_payload('HW:')
+
 
         except Exception as e:
             messagebox.showerror("NUS Connection Error", str(e))
@@ -296,8 +312,22 @@ class MultiSendNusApp(tk.Tk):
         try:
             decoded_text = data.decode("utf-8").strip()
             SQzrlist=decoded_text.split(':')
+            if(SQzrlist[0]!='HF'):
+               self.log_to_terminal(f"[RX]: {decoded_text}")
+               
             if SQzrlist[0]=='HF':
                self.HF_lbl.config(text=decoded_text)
+            elif SQzrlist[0]=='HW':
+                self.HWID_lbl.config(text='HWID:'+SQzrlist[1])
+            elif SQzrlist[0]=='BP':
+                self.BatPcnt_lbl.config(text='B%:'+SQzrlist[1])
+            elif SQzrlist[0]=='BV':
+                self.BatVolts_lbl.config(text='BV:'+SQzrlist[1])
+            elif SQzrlist[0]=='R':
+                self.SWRev_lbl.config(text='SW:'+SQzrlist[1])
+            elif SQzrlist[0]=='C?':
+                self.CalCk_lbl.config(text='Cal?:'+SQzrlist[1])
+            
             else:
                self.log_to_terminal(f"[RX]: {decoded_text}")
         except UnicodeDecodeError:
@@ -311,12 +341,13 @@ class MultiSendNusApp(tk.Tk):
 
         try:
             # Append standard serial termination characters
+#             print(f'text payload: {text_payload}')
             encoded = (text_payload + "\r\n").encode("utf-8")
-            print(f'encoded in send_payload ={encoded}')
+#             print(f'encoded in send_payload ={encoded}')
             await self.client.write_gatt_char(NUS_RX_UUID, encoded, response=False)
-#             print("In send payload got here???")
             self.log_to_terminal(f"[TX]: {text_payload}")
-#             print("in send payload, after log to terminal")
+            await asyncio.sleep(0.01)	#give it some time?
+
         except Exception as e:
             self.log_to_terminal(f"[SYS ERROR]: Failed payload write: {e}")
 
@@ -349,7 +380,7 @@ class MultiSendNusApp(tk.Tk):
         if self.client and self.client.is_connected:
             print('application closed')
             asyncio.create_task(self.send_payload('X:'))
-#         self.send_payload('X:')
+#             self.send_payload('X:')
 #         asyncio.create_task(self.disconnect_nus())
         self.destroy()
 
@@ -363,13 +394,15 @@ class AsyncLoopEngine:
         while app.is_running:
             try:
                 app.update()
-                app.input_entry.delete(0,tk.END)
-                app.input_entry.insert(0,"bp:?")
-                app.send_btn.invoke()
-                app.macro_buttons[1].invoke()
+                # bewlow works, can call self stuff
+#                 app.input_entry.delete(0,tk.END)
+#                 app.input_entry.insert(0,"bp:?")
+#                 app.send_btn.invoke()
+#                 await app.send_payload("Hello")
+#                 app.macro_buttons[1].invoke()
 #                 print(f"print HF = {app.HF_lbl['text']}") #(yes we can)
 #                 app.log_to_terminal("log to terminal")
-                await asyncio.sleep(1.02)
+                await asyncio.sleep(0.02)
             except tk.TclError:
                 break
 
