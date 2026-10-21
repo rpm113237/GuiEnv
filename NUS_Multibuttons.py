@@ -16,7 +16,7 @@ class MultiSendNusApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("NUS Controller with Macro Presets")
+        self.title("Squeezer GUI Oct26")
         self.geometry("800x1400")
 
         self.is_running = True
