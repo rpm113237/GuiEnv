@@ -14,7 +14,8 @@ NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # Write
 TARGET_DEVICE_NAME = "Squeezer"
 class MultiSendNusApp(tk.Tk):
 
-    def __init__(self):
+    # def __init__(self,serial_port: str):
+    def __init__(self):gui
         super().__init__()
         self.title("Squeezer GUI Oct26")
         self.geometry("800x1400")
@@ -56,7 +57,8 @@ class MultiSendNusApp(tk.Tk):
 #         print("Available themes:", self.style.theme_names())
         
         # --- 1. Connection Controls Panel ---
-        top_frame = tk.Frame(self, relief='groove',highlightbackground="blue",highlightcolor="blue", highlightthickness=4,borderwidth = 5)        
+        top_frame = tk.Frame(self, relief='groove',highlightbackground="blue",
+                                highlightcolor="blue", highlightthickness=4,borderwidth = 5)        
         top_frame.pack(fill=tk.X,padx=10, pady=10)
         top_frame.columnconfigure(0, weight=1)
         top_frame.columnconfigure(1, weight=1)
@@ -397,6 +399,7 @@ class MultiSendNusApp(tk.Tk):
 class AsyncLoopEngine:
     @staticmethod
     async def run_application():
+        USB_SERIAL_PORT = "/dev/ttyUSB0"
         print("are we here?")
         app = MultiSendNusApp()
 #         app.macro_buttons[1].invoke()
