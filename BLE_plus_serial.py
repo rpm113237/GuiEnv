@@ -23,6 +23,7 @@ class AsyncScannerApp(tk.Tk):
         logging.info("\nInitializing AsyncScannerApp...")
         
         self.serial_port = serial_port
+        self.attempt =0
         
         # Hardware communication objects
         self.ser_reader: Optional[asyncio.StreamReader] = None
@@ -91,7 +92,8 @@ class AsyncScannerApp(tk.Tk):
 
     def on_send_click(self):
         """Dispatches outbound command to both communication systems."""
-        asyncio.create_task(self.broadcast_data(b"PING\n"))
+        asyncio.create_task(self.send_serial(b"BP:?\n"))
+        asyncio.create_task(self.send_ble(b"BP:?\n"))
         
     async def ble_supervisor_loop(self):
         """Keeps scanning/connecting in the background; never blocks the UI."""
@@ -109,6 +111,7 @@ class AsyncScannerApp(tk.Tk):
         self.ble_dropdown.set("Searching for Squeezer...")
         self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
         logging.info("[BLE]: Starting scan for devices...")
+        # attempt =0
         
         try:
             # Look for devices for up to 4 seconds
@@ -117,25 +120,26 @@ class AsyncScannerApp(tk.Tk):
             self.discovered_devices.clear()
             dropdown_options = []
             target_mac: Optional[str] = None
-            max_attempts = 5
+            # max_attempts = 5
             target_mac = None
 
-            for attempt in range(1, max_attempts + 1):
-                logging.info(f"[BLE]: Attempt {attempt} to discover devices...")
-                devices = await BleakScanner.discover(timeout=1.0)
-                logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
-                self.discovered_devices.clear()
-                dropdown_options = []
-                target_mac = None
+            # for attempt in range(1, max_attempts + 1):
+            self.attempt = 1 + self.attempt
+            logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
+            devices = await BleakScanner.discover(timeout=1.0)
+            logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
+            self.discovered_devices.clear()
+            dropdown_options = []
+            target_mac = None
 
-                for d in devices:
-                    name = d.name if d.name else "Unknown Device"
-                    display_string = f"{name} ({d.address})"
-                    self.discovered_devices[display_string] = d.address
-                    dropdown_options.append(display_string)
+            for d in devices:
+                name = d.name if d.name else "Unknown Device"
+                display_string = f"{name} ({d.address})"
+                self.discovered_devices[display_string] = d.address
+                dropdown_options.append(display_string)
 
-                    if name == "Squeezer":
-                        target_mac = d.address
+                if name == "Squeezer":
+                    target_mac = d.address
 
                 if dropdown_options:
                     self.ble_dropdown.config(values=dropdown_options)
@@ -143,25 +147,7 @@ class AsyncScannerApp(tk.Tk):
                 if target_mac:
                     break
 
-                if attempt < max_attempts:
-                    self.log_to_ui(f"[BLE]: Squeezer not found; retrying ({attempt}/{max_attempts})...")
-                    logging.info(f"[BLE]: Squeezer not found; retrying ({attempt}/{max_attempts})...")
-                    await asyncio.sleep(2)
-            
-            # for d in devices:
-            #     name = d.name if d.name else "Unknown Device"
-            #     display_string = f"{name} ({d.address})"
-            #     self.discovered_devices[display_string] = d.address
-            #     dropdown_options.append(display_string)
-                
-            #     # Check for the specific target name match
-            #     if name == "Squeezer":
-            #         target_mac = d.address
-
-            # # Update the dropdown options regardless, so you see what was found
-            # if dropdown_options:
-            #     self.ble_dropdown.config(values=dropdown_options)
-            
+                            
             # Action path conditional on finding the target device
             if target_mac:
                 self.ble_dropdown.set(f"Squeezer Found! ({target_mac})")
@@ -221,6 +207,7 @@ class AsyncScannerApp(tk.Tk):
             await self.ble_client.connect()
             self.log_to_ui("[BLE]: Connected to NUS service successfully!")
             logging.info(f"Connected to BLE device at {mac_address}")
+            self.attempt = 0
             
             # Start notifications from the device TX channel
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
@@ -236,18 +223,38 @@ class AsyncScannerApp(tk.Tk):
         """Callback processing inbound wireless frames."""
         decoded = data.decode('utf-8', errors='ignore').strip()
         self.log_to_ui(f"[RX BLE]: {decoded}")
-
+        logging.info(f"[BLE_RX]: {decoded}")
+        
+    async def send_serial(self, data: bytes ):
+        """Sends data the serial device over USB."""
+        if self.ser_writer:
+              self.ser_writer.write(data)
+              await self.ser_writer.drain()
+              self.log_to_ui(f"[TX Serial]: {data.decode().strip()}")    
+              
+    async def send_ble(self, data: bytes):
+        """Sends data to the BLE device over the Nordic NUS service."""
+        if self.ble_client and self.ble_client.is_connected:
+            try:
+                await self.ble_client.write_gatt_char(NUS_RX_UUID, data, response=False)
+                self.log_to_ui(f"[TX BLE]: {data.decode().strip()}")
+                logging.info(f"[BLE_TX]: {data.decode().strip()}")
+            except Exception as e:
+                self.log_to_ui(f"[BLE TX Error]: {e}")
+                
     async def broadcast_data(self, data: bytes):
         """Sends identical payloads to both interfaces synchronously."""
         if self.ser_writer:
             self.ser_writer.write(data)
             await self.ser_writer.drain()
             self.log_to_ui(f"[TX Serial]: {data.decode().strip()}")
+            logging.info(f"[TX Serial]: {data.decode().strip()}")
             
         if self.ble_client and self.ble_client.is_connected:
             try:
                 await self.ble_client.write_gatt_char(NUS_RX_UUID, data, response=False)
                 self.log_to_ui(f"[TX BLE]: {data.decode().strip()}")
+                logging.info(f"[BLE_TX]: {data.decode().strip()}")
             except Exception as e:
                 self.log_to_ui(f"[BLE TX Error]: {e}")
 
