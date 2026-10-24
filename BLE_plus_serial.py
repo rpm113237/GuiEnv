@@ -109,8 +109,8 @@ class AsyncScannerApp(tk.Tk):
         self.is_scanning = True
         # self.scan_btn.config(state="disabled")
         self.ble_dropdown.set("Searching for Squeezer...")
-        self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
-        logging.info("[BLE]: Starting scan for devices...")
+        # self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
+        # logging.info("[BLE]: Starting scan for devices...")
         # attempt =0
         
         try:
@@ -124,10 +124,10 @@ class AsyncScannerApp(tk.Tk):
             target_mac = None
 
             # for attempt in range(1, max_attempts + 1):
-            self.attempt = 1 + self.attempt
-            logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
+            # self.attempt = 1 + self.attempt
+            # logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
             devices = await BleakScanner.discover(timeout=1.0)
-            logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
+            # logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
             self.discovered_devices.clear()
             dropdown_options = []
             target_mac = None
@@ -198,16 +198,16 @@ class AsyncScannerApp(tk.Tk):
     async def connect_ble(self, mac_address: str):
         """Connects to the user-selected Nordic NUS BLE peripheral."""
         self.log_to_ui(f"[BLE]: Connecting to {mac_address}...")
-        logging.info(f"Attempting to connect to BLE device at {mac_address}")
+        # logging.info(f"Attempting to connect to BLE device at {mac_address}")
         # self.connect_btn.config(state="disabled")
         # self.scan_btn.config(state="disabled")
         
         self.ble_client = BleakClient(mac_address)
         try:
             await self.ble_client.connect()
-            self.log_to_ui("[BLE]: Connected to NUS service successfully!")
+            # self.log_to_ui("[BLE]: Connected to NUS service successfully!")
             logging.info(f"Connected to BLE device at {mac_address}")
-            self.attempt = 0
+            # self.attempt = 0
             
             # Start notifications from the device TX channel
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
@@ -223,7 +223,8 @@ class AsyncScannerApp(tk.Tk):
         """Callback processing inbound wireless frames."""
         decoded = data.decode('utf-8', errors='ignore').strip()
         self.log_to_ui(f"[RX BLE]: {decoded}")
-        logging.info(f"[BLE_RX]: {decoded}")
+        if decoded.find("HF") == -1:
+            logging.info(f"[BLE_RX]: {decoded}")
         
     async def send_serial(self, data: bytes ):
         """Sends data the serial device over USB."""
@@ -277,34 +278,21 @@ class AsyncScannerApp(tk.Tk):
         # Initialize serial connection immediately upon startup
         await self.connect_serial()
         # Start the BLE supervisor loop in the background
-        logging.info("Starting main lifecycle...")
-
+        # logging.info("Starting main lifecycle...")
         scan_task = asyncio.create_task(self.ble_supervisor_loop())
-        logging.info("BLE supervisor loop started.")
+        # logging.info("BLE supervisor loop started.")
+        
         try:
             await self.gui_updater_loop()
+            logging.info("GUI updater loop exited.")
         finally:
             scan_task.cancel()
             if self.ble_client and self.ble_client.is_connected:
                 await self.ble_client.disconnect()
+                logging.info("BLE client disconnected.")
         logging.info("Main run context safely closed.")
-
-        
-        # logging.info("Starting main lifecycle...")
-                
-        # """Scans for BLE devices and automatically connects if 'Squeezer' is found."""
-        # if not self.ble_client or not self.ble_client.is_connected:
-        #     logging.info("Scanning for BLE devices...")
-        #     await self.scan_for_ble_devices()
-        #     logging.info("BLE scan completed.")
-        
-        # # Enter the event loop driving UI adjustments
-        # await self.gui_updater_loop()
-        
-        # # Cleanup routine when the loop stops
-        # if self.ble_client and self.ble_client.is_connected:
-        #     await self.ble_client.disconnect()
-        # logging.info("Main run context safely closed.")
+     
+      
 
 # ==========================================
 # Application Launch Hook
@@ -316,6 +304,7 @@ if __name__ == "__main__":
     app = AsyncScannerApp(serial_port=USB_SERIAL_PORT)
     
     try:
+        logging.info("Launching application...")
         asyncio.run(app.main_lifecycle())
         logging.info("Application exited normally.")
     except KeyboardInterrupt:
