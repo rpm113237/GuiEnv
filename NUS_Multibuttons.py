@@ -5,6 +5,10 @@ import tkinter.font as tkfont
 from bleak import BleakScanner, BleakClient
 import serial
 import random
+# Set the DISPLAY environment variable for GUI display on Rpi
+import os
+os.environ["DISPLAY"] = ":0"
+
 
 # Standard Nordic UART Service (NUS) UUIDs
 NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -15,7 +19,7 @@ TARGET_DEVICE_NAME = "Squeezer"
 class MultiSendNusApp(tk.Tk):
 
     # def __init__(self,serial_port: str):
-    def __init__(self):gui
+    def __init__(self):
         super().__init__()
         self.title("Squeezer GUI Oct26")
         self.geometry("800x1400")
@@ -295,7 +299,7 @@ class MultiSendNusApp(tk.Tk):
             
             #send wakeup stuff
             await self.send_payload('HW:')	#HWID
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2222222)
             await self.send_payload('R:')
             await asyncio.sleep(0.1)
             await self.send_payload('BP:')
