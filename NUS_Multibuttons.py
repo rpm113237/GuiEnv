@@ -1,9 +1,10 @@
 import asyncio
+import logging
 import tkinter as tk
 from tkinter import ttk, messagebox
 import tkinter.font as tkfont
 from bleak import BleakScanner, BleakClient
-import serial
+import serial_asyncio
 import random
 # Set the DISPLAY environment variable for GUI display on Rpi
 import os

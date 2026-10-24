@@ -30,6 +30,24 @@ class AsyncScannerApp(tk.Tk):
         self.ser_writer: Optional[asyncio.StreamWriter] = None
         self.ble_client: Optional[BleakClient] = None
         
+        
+                
+        # mess with styles;
+        self.style =ttk.Style(self)
+        self.style.theme_use('clam')
+        
+        self.style.configure('TButton', background = 'ivory', width=0,foreground='indigo',padding=(0,5), borderwidth =3, font =('Helvetica',12,'bold'))
+        self.style.configure('TLabel', background = 'light blue', foreground='magenta',font =('Helvetica',12,'bold'))
+        self.style.configure('TLabelFrame', relief='raised', borderwidth =5)
+        self.style.configure("TFrame", background ='light blue', bordercolor='yellow',borderwidth = 50, relief='groove')
+        self.style.configure("Warning.TButton", foreground = 'red', background='light blue', font=('Helvetica',16,'bold'))
+        # Configure the 'Treeview.Heading' style globally
+        self.style.configure("Treeview.Heading",background="light blue",foreground="green",font=("Helvetica", 11, "bold"))
+        # Configure the frame container style
+        self.style.configure("Custom.TLabelframe",background="#f0f0f0",bordercolor='red',borderwidth=2,relief="raised",)
+        # Configure the title text inside the labelframe
+        self.style.configure("Custom.TLabelframe.Label",background="#f0f0f0",foreground = 'magenta',font=("Helvetica", 16, "bold"),)
+        
         # Runtime states
         self.is_running = True
         self.is_scanning = False
@@ -37,7 +55,7 @@ class AsyncScannerApp(tk.Tk):
 
         # UI Initialization
         self.title("Squeezer GUI with Serial")
-        self.geometry("1000x750")
+        self.geometry("800x1400")
         
         # 1. Configuration Section Frame
         config_frame = ttk.LabelFrame(self, text=" Hardware Connections ", padding=10)
