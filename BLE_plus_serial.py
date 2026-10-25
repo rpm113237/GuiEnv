@@ -1,10 +1,17 @@
 import asyncio
+import importlib
 import logging
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Dict
-import serial_asyncio
+import random
+import tkinter.font as tkfont
 from bleak import BleakClient, BleakScanner
+# no idea why I had to do this below
+try:
+    serial_asyncio = importlib.import_module("serial_asyncio")
+except ImportError:
+    serial_asyncio = None
 # following enables the display on the Raspberry Pi when using Tkinter
 import os
 os.environ["DISPLAY"] = ":0"
@@ -47,7 +54,7 @@ class AsyncScannerApp(tk.Tk):
         self.style.configure("Custom.TLabelframe",background="#f0f0f0",bordercolor='red',borderwidth=2,relief="raised",)
         # Configure the title text inside the labelframe
         self.style.configure("Custom.TLabelframe.Label",background="#f0f0f0",foreground = 'magenta',font=("Helvetica", 16, "bold"),)
-        
+        # 
         # Runtime states
         self.is_running = True
         self.is_scanning = False
@@ -57,44 +64,251 @@ class AsyncScannerApp(tk.Tk):
         self.title("Squeezer GUI with Serial")
         self.geometry("800x1400")
         
-        # 1. Configuration Section Frame
-        config_frame = ttk.LabelFrame(self, text=" Hardware Connections ", padding=10)
-        config_frame.pack(fill="x", padx=15, pady=10)
+        # # 1. Configuration Section Frame
+        # config_frame = ttk.LabelFrame(self, text=" Hardware Connections ", padding=10)
+        # config_frame.pack(fill="x", padx=15, pady=10)
         
-        # BLE Dropdown Menu Setup
-        ttk.Label(config_frame, text="Select BLE Device:").grid(row=0, column=0, sticky="w", padx=5)
-        self.ble_dropdown = ttk.Combobox(config_frame, width=30, state="readonly")
-        self.ble_dropdown.set("Click Scan to search...")
-        self.ble_dropdown.grid(row=0, column=1, padx=5, pady=5)
-        
-        # # Scan and Connect Buttons
-        # self.scan_btn = ttk.Button(config_frame, text="Scan", command=self.on_scan_click)
-        # self.scan_btn.grid(row=0, column=2, padx=5)
-        
-        # self.connect_btn = ttk.Button(config_frame, text="Connect", command=self.on_connect_click, state="disabled")
-        # self.connect_btn.grid(row=0, column=3, padx=5)
+        # # BLE Dropdown Menu Setup
+        # ttk.Label(config_frame, text="Select BLE Device:").grid(row=0, column=0, sticky="w", padx=5)
+        # self.ble_dropdown = ttk.Combobox(config_frame, width=30, state="readonly")
+        # self.ble_dropdown.set("Click Scan to search...")
+        # self.ble_dropdown.grid(row=0, column=1, padx=5, pady=5)
+              
 
-        # 2. Status Information Panel
-        self.status_label = ttk.Label(self, text="System: Waiting for Serial Initialization...", font=("Arial", 11, "bold"))
-        self.status_label.pack(anchor="w", padx=20, pady=5)
+        # # 2. Status Information Panel
+        # self.status_label = ttk.Label(self, text="System: Waiting for Serial Initialization...", font=("Arial", 11, "bold"))
+        # self.status_label.pack(anchor="w", padx=20, pady=5)
         
-        # 3. Log Output Panel
-        self.log_widget = tk.Text(self, height=15, width=60, state='disabled', background="#1e1e1e", foreground="#ffffff")
-        self.log_widget.pack(padx=15, pady=10, fill="both", expand=True)
+        # # 3. Log Output Panel
+        # self.log_widget = tk.Text(self, height=15, width=60, state='disabled', background="#1e1e1e", foreground="#ffffff")
+        # self.log_widget.pack(padx=15, pady=10, fill="both", expand=True)
         
-        # 4. Global Action Controller
-        self.send_btn = ttk.Button(self, text="Broadcast PING Command", command=self.on_send_click, state="disabled")
-        self.send_btn.pack(pady=10)
+        # # 4. Global Action Controller
+        # self.send_btn = ttk.Button(self, text="Broadcast PING Command", command=self.on_send_click, state="disabled")
+        # self.send_btn.pack(pady=10)
         
+        
+        # Track all dynamically generated preset buttons for mass state tracking
+        self.macro_buttons = []
+            
         # Setup clean closure protocols
         self.protocol("WM_DELETE_WINDOW", self.close_app)
+        
+        
+        # if hasattr(self, 'build_connection_controls'):
+        self.build_connection_controls()
+        # if hasattr(self, 'build_terminal_frame'):
+        self.build_terminal_frame()
+        # if hasattr(self, 'build_macro_frame'):
+        self.build_macro_frame()
+        # if hasattr(self, 'build_manual_transmit_frame'):
+        self.build_manual_transmit_frame()
+        
+    
+    #         print("Available themes:", self.style.theme_names())
+    def build_connection_controls(self):
+        """Builds the connection controls panel."""
+            # --- 1. Connection Controls Panel ---
+        top_frame = tk.Frame(self, relief='groove',highlightbackground="blue",
+        highlightcolor="blue", highlightthickness=4,borderwidth = 5)        
+        top_frame.pack(fill=tk.X,padx=10, pady=10)
+        top_frame.columnconfigure(0, weight=1)
+        top_frame.columnconfigure(1, weight=1)
+        top_frame.columnconfigure(2, weight=1)
+
+        self.status_lbl = ttk.Label(top_frame, text="Disconnected")
+        self.status_lbl.grid(row=0, column=0, sticky ='n')
+        
+        self.scan_btn = ttk.Button(top_frame,text="Connect",
+            command=lambda: asyncio.create_task(self.connect_nus_device())    )
+        #self.scan_btn.pack(side=tk.TOP, anchor='w',)
+        self.scan_btn.grid(row=1, column=0, sticky ='n')
+        
+        self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED,
+            command=lambda: asyncio.create_task(self.disconnect_nus())  )
+#         self.disconnect_btn.pack(side=tk.TOP, anchor='w')
+        self.disconnect_btn.grid(row=2, column=0, sticky ='n')
+        
+        self.mac_lbl = ttk.Label(top_frame, text="00:00:00:00:00:00")
+        self.mac_lbl.grid(row=3, column=0, sticky ='n')
+        
+        self.HWID_lbl = ttk.Label(top_frame, text="HWID")
+        self.HWID_lbl.grid(row=0, column=1, sticky ='n')
+        
+        self.SWRev_lbl = ttk.Label(top_frame, text="SW Rev")
+        self.SWRev_lbl.grid(row=1, column=1, sticky ='n')
+        
+        self.BatVolts_lbl = ttk.Label(top_frame, text="BattVolts:---")
+        self.BatVolts_lbl.grid(row=2, column=1, sticky ='n')
+        
+        self.BatPcnt_lbl = ttk.Label(top_frame, text="BattPcnt:---")
+        self.BatPcnt_lbl.grid(row=3, column=1, sticky ='n')
+                
+        self.HF_lbl = ttk.Label(top_frame, text="HF:NN.MM", font=("Helvetica", 16, "bold"))
+        self.HF_lbl.grid(row=0, column=2, sticky ='n')
+        
+        self.SF_lbl = ttk.Label(top_frame, text="SF:NN.MM", font=("Helvetica", 16, "bold"))
+        self.SF_lbl.grid(row=1, column=2)
+        
+        self.TGT_lbl = ttk.Label(top_frame, text="TGT:NN.MM", font=("Helvetica", 16, "bold"))
+        self.TGT_lbl.grid(row=2, column=2) 
+                   
+    #2a------ Terminal Frame
+    def build_terminal_frame(self):
+        """Builds the terminal frame for displaying received data."""
+        
+        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", labelanchor = 'n',relief ='raised', borderwidth=15)
+        middle_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
+
+        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=15,
+                                fg="#00ff00", font=("Consolas", 10, 'bold'))
+        self.terminal.pack(side = tk.LEFT,padx=5, pady=5)
+        
+        #2b-----calib frame        
+        calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
+        calib_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        frame = ttk.Frame(self, relief="sunken", borderwidth=45, width=200, height=10)
+        frame.pack(padx=20)
+#         self.calib_lbl = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED, bg="light blue", relief="raised", bd=5,
+#                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
+#         self.calib_lbl.pack(padx=5, pady=5)
+        self.CalCk_lbl = tk.Label(calib_frame, text="UnCalibrated", fg='white', bg = 'red')
+        self.CalCk_lbl.pack()
+        
+        calibhdr_frame = ttk.Frame(calib_frame,relief ='raised',borderwidth=15)        
+        calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
+        
+        self.calibstart_lbl=tk.Label(calibhdr_frame, text="Start\n(lbs)", bg='pink',fg='blue')
+        self.calibstart_lbl.pack(side =tk.LEFT)
+        self.calibstart_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 16, "bold"))
+        self.calibstart_ent.insert(0,'10')
+        self.calibstart_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calibstep_lbl=tk.Label(calibhdr_frame, text="Step\n(lbs)", bg='pink',fg='blue')
+        self.calibstep_lbl.pack(side =tk.LEFT)
+        self.calibstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
+        self.calibstep_ent.insert(0,'20')
+        self.calibstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calibnumstep_lbl=tk.Label(calibhdr_frame, text="Num\nSteps", bg='pink',fg='blue')
+        self.calibnumstep_lbl.pack(side =tk.LEFT)
+        self.calibnumstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
+        self.calibnumstep_ent.insert(0,'6')
+        self.calibnumstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        
+        self.calibtare_lbl=tk.Label(calibhdr_frame, text="Tare\n----", bg='pink',fg='blue')
+        self.calibtare_lbl.pack(side =tk.LEFT)
+        
+        self.calib_doit_btn = ttk.Button(
+            calibhdr_frame,
+            style="Warning.TButton",
+            text="Do It",
+            #command=lambda: asyncio.create_task(self.connect_nus_device()),
+            command= lambda: print('Do It(TODO)'))        
+        self.calib_doit_btn.pack(side=tk.RIGHT, padx=5)
+        
+        self.calib_ckcal_btn = ttk.Button(
+            calibhdr_frame,
+#             style="Warning.TButton",
+            text="Check\nCal",
+            #command=lambda: asyncio.create_task(self.connect_nus_device()),
+            command= lambda: print('check calibration (TODO)'))        
+        self.calib_ckcal_btn.pack(side=tk.RIGHT, padx=5)        
+        
+        calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
+        calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
+        
+        # 2. Define Columns
+        # Use internal IDs for code management; these do not have to be the text
+        columns = ("CalWt", "CalVal")
+
+        # 3. Create Treeview Widget        
+        table = ttk.Treeview(calibdata_frame, columns=columns, show="headings", selectmode="browse")
+                
+        sqfont = tkfont.Font(root=self, font="TkDefaultFont")
+        #to calculate column width based on font size
+
+        # 4. Define Headings (What the user sees at the top)
+        table.heading("CalWt", text="CalWt")
+        table.heading("CalVal", text="CalVal")
+        
+        # 5. Define Column Properties
+        # anchor="w" aligns text left (West), "center" aligns center
+        table.column("CalWt", width=sqfont.measure('123.456')+10, minwidth=1, anchor="center")
+        table.column("CalVal", width=sqfont.measure('12345.5678')+10, minwidth=1, anchor="center")
+
+        ncalpts=15  #desired number of elements
+        data_list = [(str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
+        
+        # "show='headings'" hides the default hierarchical first column (tree arrow)
+        for row in data_list:
+            table.insert("", tk.END, values=row)
+
+        # 7. Add a Scrollbar
+        scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=table.yview)
+        table.configure(yscrollcommand=scrollbar.set)
+
+        # 8. Pack layout elements
+        table.grid(row=0, column=0, sticky = 'n')
+        scrollbar.grid(row=0,column=1,sticky='ns')
+        
+        self.caldelta_lbl=tk.Label(calibdata_frame, text="Delta", bg='pink',fg='blue')
+        self.caldelta_lbl.grid(row = 1, column = 0, sticky = 'w')        
+        
+    def build_macro_frame(self):
+        """Builds the macro commands panel."""
+        # --- 3. MULTIPLE SEND BUTTONS PANEL (Macros) ---
+        macro_frame = ttk.LabelFrame(self,  text=" Macro Commands ")
+        macro_frame.pack(fill=tk.X, expand=True, padx=10, pady=5)
+
+        # Mapping: {"Button Label": "Data to Send"}
+        presets = {
+            "Batt %": "bp:?",
+            'Batt V':'BV:?',
+            "Tare": "TR:?",
+            "Cal?": "C:?",
+            "HWID": "HW:?",
+            "SW Rev":"R:?",
+            "OFF":"X"
+        }
+
+        # Dynamically loop and instantiate macro buttons
+        for label, command_string in presets.items():
+            btn = ttk.Button(
+                macro_frame,
+                text=label,
+                state=tk.DISABLED,
+                # Pass the unique command payload through lambda into our scheduler
+                command=lambda cmd=command_string: asyncio.create_task(self.send_payload(cmd)),
+            )
+
+            btn.pack(side=tk.LEFT,expand=True)
+            self.macro_buttons.append(btn)
+
+        # --- 4. Manual Transmit Panel ---
+    def build_manual_transmit_frame(self):
+        """Builds the manual transmit panel."""
+        bottom_frame = ttk.LabelFrame(self, text=" Manual Custom Send (RX) ")
+        bottom_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        self.input_entry = ttk.Entry(bottom_frame)
+        self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        self.input_entry.bind("<Return>", lambda event: asyncio.create_task(self.send_manual_input()))
+
+        self.send_btn = ttk.Button(
+            bottom_frame,
+            text="Send String",
+            state=tk.DISABLED,
+            command=lambda: asyncio.create_task(self.send_manual_input()),
+        )
+        self.send_btn.pack(side=tk.RIGHT, padx=5, pady=5)
 
     def log_to_ui(self, message: str):
         """Thread-safe context logging text to UI panel."""
-        self.log_widget.config(state='normal')
-        self.log_widget.insert(tk.END, message + "\n")
-        self.log_widget.see(tk.END)
-        self.log_widget.config(state='disabled')
+        self.terminal.config(state='normal')
+        self.terminal.insert(tk.END, message + "\n")
+        self.terminal.see(tk.END)
+        self.terminal.config(state='disabled')
 
     # def on_scan_click(self):
     #     """Triggered when the scan button is clicked."""
@@ -115,6 +329,11 @@ class AsyncScannerApp(tk.Tk):
         
     async def ble_supervisor_loop(self):
         """Keeps scanning/connecting in the background; never blocks the UI."""
+        logging.info("Starting BLE supervisor loop...")
+        if self.is_running:
+            logging.info("BLE supervisor loop is running...")
+        else:
+            logging.info("BLE supervisor loop is not running.")
         while self.is_running:
             if not self.ble_client or not self.ble_client.is_connected:
                 if not self.is_scanning:
@@ -126,9 +345,9 @@ class AsyncScannerApp(tk.Tk):
         """Scans for BLE devices and automatically connects if 'Squeezer' is found."""
         self.is_scanning = True
         # self.scan_btn.config(state="disabled")
-        self.ble_dropdown.set("Searching for Squeezer...")
-        # self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
-        # logging.info("[BLE]: Starting scan for devices...")
+        # self.ble_dropdown.set("Searching for Squeezer...")
+        self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
+        logging.info("[BLE]: Starting scan for Squeezer...")
         # attempt =0
         
         try:
@@ -143,24 +362,26 @@ class AsyncScannerApp(tk.Tk):
 
             # for attempt in range(1, max_attempts + 1):
             # self.attempt = 1 + self.attempt
-            # logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
+            logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
             devices = await BleakScanner.discover(timeout=1.0)
-            # logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
+            logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
             self.discovered_devices.clear()
-            dropdown_options = []
+            # dropdown_options = []
             target_mac = None
 
             for d in devices:
                 name = d.name if d.name else "Unknown Device"
                 display_string = f"{name} ({d.address})"
+                logging.info(f"[BLE]: Discovered device: {display_string}") 
                 self.discovered_devices[display_string] = d.address
                 dropdown_options.append(display_string)
 
                 if name == "Squeezer":
                     target_mac = d.address
+                    logging.info(f"[BLE1]: Found 'Squeezer' at {target_mac}")    
 
-                if dropdown_options:
-                    self.ble_dropdown.config(values=dropdown_options)
+                # if dropdown_options:
+                #     self.mac_lbl.config(values=dropdown_options)
 
                 if target_mac:
                     break
@@ -168,36 +389,46 @@ class AsyncScannerApp(tk.Tk):
                             
             # Action path conditional on finding the target device
             if target_mac:
-                self.ble_dropdown.set(f"Squeezer Found! ({target_mac})")
+                # self.ble_dropdown.set(f"Squeezer Found! ({target_mac})")
+                logging.info(f"[BLE2]: Found 'Squeezer' at {target_mac}")
                 self.log_to_ui(f"[BLE]: Found 'Squeezer' at {target_mac}. Connecting automatically...")
                 
                 # Hand control off to the connection manager task
                 await self.connect_ble(target_mac)
             else:
-                self.ble_dropdown.set("Squeezer not found.")
+                # self.ble_dropdown.set("Squeezer not found.")
+                logging.info("[BLE]: 'Squeezer' not found in this scan cycle.")
                 self.log_to_ui("[BLE]: Scan finished. 'Squeezer' was not detected in this cycle.")
-                if dropdown_options:
-                    self.connect_btn.config(state="normal")  # Allow fallback manual connect
+                # if dropdown_options:
+                #     self.connect_btn.config(state="normal")  # Allow fallback manual connect
                 
         except Exception as e:
-            self.log_to_ui(f"[BLE Scan Error]: {e}")
-            self.ble_dropdown.set("Scan failed.")
+            # self.log_to_ui(f"[BLE Scan Error]: {e}")
+            # self.ble_dropdown.set("Scan failed.")
+            logging.info(f"[BLE]: Scan failed with error: {e}")
+            # logging.info("[BLE]: Scan attempt finished.")
         finally:
             self.is_scanning = False
             # self.scan_btn.config(state="normal")
 
     async def connect_serial(self):
         """Connects to the background Serial line."""
+        if serial_asyncio is None:
+            message = "serial_asyncio is unavailable; serial connection skipped."
+            self.log_to_ui(f"[Serial Error]: {message}")
+            self.status_lbl.config(text="Serial unavailable")
+            return
+
         try:
             self.ser_reader, self.ser_writer = await serial_asyncio.open_serial_connection(
                 url=self.serial_port, baudrate=115200
             )
             self.log_to_ui(f"[Serial]: Connected safely to {self.serial_port}")
             asyncio.create_task(self.read_serial_loop())
-            self.status_label.config(text="System: Serial Connected. Ready to scan BLE.")
+            self.status_lbl.config(text="System: Serial Connected. Ready to scan BLE.")
         except Exception as e:
             self.log_to_ui(f"[Serial Error]: Connection failed: {e}")
-            self.status_label.config(text="System: Serial initialization failed.")
+            self.status_lbl.config(text="System: Serial initialization failed.")
 
     async def read_serial_loop(self):
         """Reads characters streaming from the USB serial device."""
@@ -216,7 +447,7 @@ class AsyncScannerApp(tk.Tk):
     async def connect_ble(self, mac_address: str):
         """Connects to the user-selected Nordic NUS BLE peripheral."""
         self.log_to_ui(f"[BLE]: Connecting to {mac_address}...")
-        # logging.info(f"Attempting to connect to BLE device at {mac_address}")
+        logging.info(f"Attempting to connect to BLE device at {mac_address}")
         # self.connect_btn.config(state="disabled")
         # self.scan_btn.config(state="disabled")
         
@@ -230,7 +461,7 @@ class AsyncScannerApp(tk.Tk):
             # Start notifications from the device TX channel
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             
-            self.status_label.config(text="System: Fully Connected (Serial + BLE)")
+            self.status_lbl.config(text="System: Fully Connected (Serial + BLE)")
             self.send_btn.config(state="normal")
         except Exception as e:
             self.log_to_ui(f"[BLE Connection Error]: {e}")
@@ -296,7 +527,7 @@ class AsyncScannerApp(tk.Tk):
         # Initialize serial connection immediately upon startup
         await self.connect_serial()
         # Start the BLE supervisor loop in the background
-        # logging.info("Starting main lifecycle...")
+        logging.info("Starting main lifecycle...")
         scan_task = asyncio.create_task(self.ble_supervisor_loop())
         # logging.info("BLE supervisor loop started.")
         

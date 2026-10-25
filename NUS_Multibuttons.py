@@ -104,15 +104,9 @@ class MultiSendNusApp(tk.Tk):
         self.SF_lbl.grid(row=1, column=2)
         
         self.TGT_lbl = ttk.Label(top_frame, text="TGT:NN.MM", font=("Helvetica", 16, "bold"))
-        self.TGT_lbl.grid(row=2, column=2)
-           
-
-        
-
-        
+        self.TGT_lbl.grid(row=2, column=2)        
         
         #2a------ Terminal Frame
-
         middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", labelanchor = 'n',relief ='raised', borderwidth=15)
         middle_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
 
@@ -120,8 +114,7 @@ class MultiSendNusApp(tk.Tk):
                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
         self.terminal.pack(side = tk.LEFT,padx=5, pady=5)
         
-        #2b-----calib frame
-        
+        #2b-----calib frame        
         calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
         calib_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         frame = ttk.Frame(self, relief="sunken", borderwidth=45, width=200, height=10)
@@ -131,8 +124,7 @@ class MultiSendNusApp(tk.Tk):
 #         self.calib_lbl.pack(padx=5, pady=5)
         self.CalCk_lbl = tk.Label(calib_frame, text="UnCalibrated", fg='white', bg = 'red')
         self.CalCk_lbl.pack()
-
-
+        
         calibhdr_frame = ttk.Frame(calib_frame,relief ='raised',borderwidth=15)        
         calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
         
@@ -171,14 +163,12 @@ class MultiSendNusApp(tk.Tk):
             text="Check\nCal",
             #command=lambda: asyncio.create_task(self.connect_nus_device()),
             command= lambda: print('check calibration (TODO)'))        
-        self.calib_ckcal_btn.pack(side=tk.RIGHT, padx=5)
-        
-        
+        self.calib_ckcal_btn.pack(side=tk.RIGHT, padx=5)        
         
         calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
         calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
         
-                # 2. Define Columns
+        # 2. Define Columns
         # Use internal IDs for code management; these do not have to be the text
         columns = ("CalWt", "CalVal")
 
