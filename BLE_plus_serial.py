@@ -252,7 +252,7 @@ class AsyncScannerApp(tk.Tk):
                 text=label,
                 state=tk.DISABLED,
                 # Pass the unique command payload through lambda into our scheduler
-                command=lambda cmd=command_string: asyncio.create_task(self.send_payload(cmd)),
+                command=lambda cmd=command_string: asyncio.create_task(self.send_ble(cmd)),
             )
 
             btn.pack(side=tk.LEFT,expand=True)
@@ -321,6 +321,8 @@ class AsyncScannerApp(tk.Tk):
             logging.info(f"[BLE]: Connected to '{name}' at {target_mac}")
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             self.log_to_ui(f"[BLE]: Started notifications for '{name}' at {target_mac}")
+            self.set_widgets_state(tk.NORMAL)  # Wake up all buttons
+            logging.info(f"[BLE]: Widgets set to NORMAL after connecting to '{name}'")
             # self.wakeup()
             asyncio.create_task(self.send_ble("HW:?"))
             await asyncio.sleep(1.0)
@@ -414,13 +416,13 @@ class AsyncScannerApp(tk.Tk):
               
     async def send_ble(self, data: str):
         """Sends data to the BLE device over the Nordic NUS service."""
-        logging.info(f"Sending BLE data: {data};")
+        logging.info(f"Sending BLE data: {data}")
         if self.ble_client and self.ble_client.is_connected:
             try:
                 encoded = (data + "\r\n").encode("utf-8")
                 await self.ble_client.write_gatt_char(NUS_RX_UUID, encoded, response=False)
-                self.log_to_ui(f"[TX BLE]: {data};")
-                logging.info(f"[BLE_TX]: {data};")
+                self.log_to_ui(f"[TX BLE]: {data}")
+                logging.info(f"[BLE_TX]: {data}")
                 
             except Exception as e:
                 self.log_to_ui(f"[BLE TX Error]: {e}")
@@ -451,6 +453,13 @@ class AsyncScannerApp(tk.Tk):
                 logging.info(f"[BLE_TX]: {data.decode().strip()}")
             except Exception as e:
                 self.log_to_ui(f"[BLE TX Error]: {e}")
+                
+    def set_widgets_state(self, state):
+        """Toggles operational state across manual entry and macro lists cleanly."""
+        self.send_btn.config(state=state)
+#         print(f" macrobuttons ={self.macro_buttons}")
+        for btn in self.macro_buttons:
+            btn.config(state=state)
 
     async def gui_updater_loop(self):
         """Explicit layout pump executing Tkinter frames every 10ms."""
