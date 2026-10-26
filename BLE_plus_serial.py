@@ -124,8 +124,8 @@ class AsyncScannerApp(tk.Tk):
         #self.scan_btn.pack(side=tk.TOP, anchor='w',)
         self.scan_btn.grid(row=1, column=0, sticky ='n')
         
-        self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED,
-            command=lambda: asyncio.create_task(self.disconnect_nus())  )
+        self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED, command=lambda: asyncio.create_task(self.send_ble('R:',0.1)))
+        
 #         self.disconnect_btn.pack(side=tk.TOP, anchor='w')
         self.disconnect_btn.grid(row=2, column=0, sticky ='n')
         
@@ -364,7 +364,7 @@ class AsyncScannerApp(tk.Tk):
             # self.attempt = 1 + self.attempt
             logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
             devices = await BleakScanner.discover(timeout=1.0)
-            logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
+            # logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
             self.discovered_devices.clear()
             # dropdown_options = []
             target_mac = None
@@ -372,13 +372,13 @@ class AsyncScannerApp(tk.Tk):
             for d in devices:
                 name = d.name if d.name else "Unknown Device"
                 display_string = f"{name} ({d.address})"
-                logging.info(f"[BLE]: Discovered device: {display_string}") 
+                # logging.info(f"[BLE]: Discovered device: {display_string}") 
                 self.discovered_devices[display_string] = d.address
-                dropdown_options.append(display_string)
+                # dropdown_options.append(display_string)
 
                 if name == "Squeezer":
                     target_mac = d.address
-                    logging.info(f"[BLE1]: Found 'Squeezer' at {target_mac}")    
+                    # logging.info(f"[BLE1]: Found 'Squeezer' at {target_mac}")    
 
                 # if dropdown_options:
                 #     self.mac_lbl.config(values=dropdown_options)
@@ -390,7 +390,7 @@ class AsyncScannerApp(tk.Tk):
             # Action path conditional on finding the target device
             if target_mac:
                 # self.ble_dropdown.set(f"Squeezer Found! ({target_mac})")
-                logging.info(f"[BLE2]: Found 'Squeezer' at {target_mac}")
+                logging.info(f"[BLE]: Found 'Squeezer' at {target_mac}")
                 self.log_to_ui(f"[BLE]: Found 'Squeezer' at {target_mac}. Connecting automatically...")
                 
                 # Hand control off to the connection manager task
@@ -437,7 +437,8 @@ class AsyncScannerApp(tk.Tk):
                 line = await self.ser_reader.readline()
                 if not line:
                     break
-                self.log_to_ui(f"[RX Serial]: {line.decode('utf-8', errors='ignore').strip()}")
+                if line.find('HF') == -1:
+                    self.log_to_ui(f"[RX Serial]: {line.decode('utf-8', errors='ignore').strip()}")
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -447,7 +448,7 @@ class AsyncScannerApp(tk.Tk):
     async def connect_ble(self, mac_address: str):
         """Connects to the user-selected Nordic NUS BLE peripheral."""
         self.log_to_ui(f"[BLE]: Connecting to {mac_address}...")
-        logging.info(f"Attempting to connect to BLE device at {mac_address}")
+        logging.info(f"Attempting to connect to Squeezer device at {mac_address}")
         # self.connect_btn.config(state="disabled")
         # self.scan_btn.config(state="disabled")
         
@@ -455,25 +456,63 @@ class AsyncScannerApp(tk.Tk):
         try:
             await self.ble_client.connect()
             # self.log_to_ui("[BLE]: Connected to NUS service successfully!")
-            logging.info(f"Connected to BLE device at {mac_address}")
-            # self.attempt = 0
-            
+            logging.info(f"Connected to Squeezer device at {mac_address}")
+            self.mac_lbl.config(text=mac_address)
             # Start notifications from the device TX channel
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             
             self.status_lbl.config(text="System: Fully Connected (Serial + BLE)")
+            self.wakeup()
             self.send_btn.config(state="normal")
         except Exception as e:
             self.log_to_ui(f"[BLE Connection Error]: {e}")
+            logging.error(f"BLE Connection Error: {e}")
             self.connect_btn.config(state="normal")
             self.scan_btn.config(state="normal")
+    
+    def wakeup(self):
+         #send wakeup stuff
+         logging.info("Sending wakeup commands to BLE device")
+         asyncio.create_task(self.send_ble('HW:',0.1))	#HWID
+         asyncio.create_task(self.send_ble('R:',0.1))
+         asyncio.create_task(self.send_ble('BP:',0.1))
+         asyncio.create_task(self.send_ble('BV:',0.1))
+         asyncio.create_task(self.send_ble('C?:',0.1))
+         asyncio.create_task(self.send_ble('TR:',0.1))
+        #             await self.send_payload('HW:')
+        #             await self.send_payload('HW:')
+        #             await self.send_payload('HW:')
 
     def on_ble_notification(self, characteristic, data: bytearray):
         """Callback processing inbound wireless frames."""
-        decoded = data.decode('utf-8', errors='ignore').strip()
-        self.log_to_ui(f"[RX BLE]: {decoded}")
-        if decoded.find("HF") == -1:
-            logging.info(f"[BLE_RX]: {decoded}")
+        decoded_text = data.decode('utf-8', errors='ignore').strip()
+        # self.log_to_ui(f"[RX BLE]: {decoded_text}")
+        try:
+            # decoded_text = data.decode("utf-8").strip()
+            SQzrlist=decoded_text.split(':')
+            if(SQzrlist[0]!='HF'):
+                self.log_to_ui(f"[RX]: {decoded_text}")
+                
+            if SQzrlist[0]=='HF':
+                self.HF_lbl.config(text=decoded_text)
+            elif SQzrlist[0]=='HW':
+                self.HWID_lbl.config(text='HWID:'+SQzrlist[1])
+            elif SQzrlist[0]=='BP':
+                self.BatPcnt_lbl.config(text='B%:'+SQzrlist[1])
+            elif SQzrlist[0]=='BV':
+                self.BatVolts_lbl.config(text='BV:'+SQzrlist[1])
+            elif SQzrlist[0]=='R':
+                self.SWRev_lbl.config(text='SW:'+SQzrlist[1])
+            elif SQzrlist[0]=='C?':
+                self.CalCk_lbl.config(text='Cal?:'+SQzrlist[1])
+            elif SQzrlist[0]=='TR':
+                self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
+            
+            else:
+                self.log_to_ui(f"[RX]: {decoded_text}")
+        except UnicodeDecodeError:
+            self.log_to_ui(f"[RX Hex]: {data.hex().upper()}")
+        
         
     async def send_serial(self, data: bytes ):
         """Sends data the serial device over USB."""
@@ -482,15 +521,28 @@ class AsyncScannerApp(tk.Tk):
               await self.ser_writer.drain()
               self.log_to_ui(f"[TX Serial]: {data.decode().strip()}")    
               
-    async def send_ble(self, data: bytes):
+    async def send_ble(self, data: str,wait_time: float):
         """Sends data to the BLE device over the Nordic NUS service."""
+        logging.info(f"Sending BLE data: {data}")
         if self.ble_client and self.ble_client.is_connected:
             try:
-                await self.ble_client.write_gatt_char(NUS_RX_UUID, data, response=False)
-                self.log_to_ui(f"[TX BLE]: {data.decode().strip()}")
-                logging.info(f"[BLE_TX]: {data.decode().strip()}")
+                encoded = (data + "\r\n").encode("utf-8")
+                await self.ble_client.write_gatt_char(NUS_RX_UUID, encoded, response=False)
+                self.log_to_ui(f"[TX BLE]: {data}")
+                logging.info(f"[BLE_TX]: {data}")
+                await asyncio.sleep(wait_time)
             except Exception as e:
                 self.log_to_ui(f"[BLE TX Error]: {e}")
+                logging.error(f"BLE TX Error: {e}")
+                
+    async def send_manual_input(self):
+            """Extracts text out of input bar and routes it directly to send_payload."""
+            payload_string = self.input_entry.get()
+            
+            if not payload_string:
+                return            
+            await self.send_ble(bytes(payload_string, 'utf-8'), 0.1)
+            self.input_entry.delete(0, tk.END)
                 
     async def broadcast_data(self, data: bytes):
         """Sends identical payloads to both interfaces synchronously."""
