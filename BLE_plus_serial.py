@@ -92,16 +92,12 @@ class AsyncScannerApp(tk.Tk):
         self.macro_buttons = []
             
         # Setup clean closure protocols
-        self.protocol("WM_DELETE_WINDOW", self.close_app)
+        self.protocol("WM_DELETE_WINDOW", self.close_app)        
         
-        
-        # if hasattr(self, 'build_connection_controls'):
+       
         self.build_connection_controls()
-        # if hasattr(self, 'build_terminal_frame'):
         self.build_terminal_frame()
-        # if hasattr(self, 'build_macro_frame'):
         self.build_macro_frame()
-        # if hasattr(self, 'build_manual_transmit_frame'):
         self.build_manual_transmit_frame()
         
     
@@ -355,7 +351,7 @@ class AsyncScannerApp(tk.Tk):
             devices = await BleakScanner.discover(timeout=1.0)
             
             self.discovered_devices.clear()
-            dropdown_options = []
+            # dropdown_options = []
             target_mac: Optional[str] = None
             # max_attempts = 5
             target_mac = None
@@ -448,7 +444,7 @@ class AsyncScannerApp(tk.Tk):
     async def connect_ble(self, mac_address: str):
         """Connects to the user-selected Nordic NUS BLE peripheral."""
         self.log_to_ui(f"[BLE]: Connecting to {mac_address}...")
-        logging.info(f"Attempting to connect to Squeezer device at {mac_address}")
+        # logging.info(f"Attempting to connect to Squeezer device at {mac_address}")
         # self.connect_btn.config(state="disabled")
         # self.scan_btn.config(state="disabled")
         
@@ -456,12 +452,14 @@ class AsyncScannerApp(tk.Tk):
         try:
             await self.ble_client.connect()
             # self.log_to_ui("[BLE]: Connected to NUS service successfully!")
-            logging.info(f"Connected to Squeezer device at {mac_address}")
-            self.mac_lbl.config(text=mac_address)
+            logging.info(f"Connected to Squeezer at {mac_address}")
+            self.mac_lbl.config(text=mac_address)   #post the mac address
             # Start notifications from the device TX channel
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
-            
+            await asyncio.sleep(10.1)
             self.status_lbl.config(text="System: Fully Connected (Serial + BLE)")
+            logging.info("Fully connected to Squeezer (Serial + BLE)")
+            self.send_ble('HW:',0.1)    #HWID
             self.wakeup()
             self.send_btn.config(state="normal")
         except Exception as e:
