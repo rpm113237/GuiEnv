@@ -308,26 +308,28 @@ class AsyncScannerApp(tk.Tk):
         """Connects to a BLE device by its advertised name."""
         target_mac = None
         devices = await BleakScanner.discover(timeout=1.0)
-        logging.info(f"[BLE]: Discovered devices: {[d.name for d in devices]}")
+        # logging.info(f"[BLE]: Discovered devices: {[d.name for d in devices]}")
         for d in devices:
             if d.name == name:
                 target_mac = d.address
                 logging.info(f"[BLE]: Found '{name}' at {target_mac}")
                 break
-        logging.info(f"[BLE]: Target MAC for '{name}' is {target_mac}")
+        # logging.info(f"[BLE]: Target MAC for '{name}' is {target_mac}")
         if target_mac:
-            self.ble_client = BleakClient(target_mac)
+            self.ble_client = BleakClient(target_mac,disconnected_callback=self.on_nus_disconnect)
             await self.ble_client.connect()
             logging.info(f"[BLE]: Connected to '{name}' at {target_mac}")
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             self.log_to_ui(f"[BLE]: Started notifications for '{name}' at {target_mac}")
             self.set_widgets_state(tk.NORMAL)  # Wake up all buttons
+            self.status_lbl.config(text="System: Serial and BLE Connected.")
             logging.info(f"[BLE]: Widgets set to NORMAL after connecting to '{name}'")
+            self.mac_lbl.configure(text=target_mac)
             # self.wakeup()
             asyncio.create_task(self.send_ble("HW:?"))
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
             asyncio.create_task(self.send_ble("R:?"))
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
             asyncio.create_task(self.send_ble("BV:?"))
             await asyncio.sleep(0.5)
             asyncio.create_task(self.send_ble("BP:?"))
@@ -362,13 +364,21 @@ class AsyncScannerApp(tk.Tk):
 
     async def read_serial_loop(self):
         """Reads characters streaming from the USB serial device."""
+        logging.info(f"[RX Serial]: self.is_running={self.is_running}ready for data...")
         while self.is_running and self.ser_reader:
+            
             try:
                 line = await self.ser_reader.readline()
+                logging.info(f"[RX Serial]: raw line: {line}")
                 if not line:
                     break
+                ser_line = line.decode('utf-8', errors='ignore').strip()
+                logging.info(f"[RX Serial]: {ser_line}")
                 if line.find('HF') == -1:
                     self.log_to_ui(f"[RX Serial]: {line.decode('utf-8', errors='ignore').strip()}")
+                else:
+                    ser_split= line.split(':')
+                    logging.info(f"[RX Serial]: HF data: {ser_split}")
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -460,6 +470,16 @@ class AsyncScannerApp(tk.Tk):
 #         print(f" macrobuttons ={self.macro_buttons}")
         for btn in self.macro_buttons:
             btn.config(state=state)
+            
+    def on_nus_disconnect(self, client):
+        self.status_lbl.config(text="Disconnected ❌")
+        self.mac_lbl.configure(text="00:00:00:00:00:00")
+        self.HF_lbl.configure(text="HF:--.--")
+        self.log_to_ui("[SYS] BLE Disconnected")
+        logging.info("BLE client disconnected.")
+        self.scan_btn.config(state=tk.NORMAL)
+        self.disconnect_btn.config(state=tk.DISABLED)
+        self.set_widgets_state(tk.DISABLED)  # Gray out all macros
 
     async def gui_updater_loop(self):
         """Explicit layout pump executing Tkinter frames every 10ms."""
