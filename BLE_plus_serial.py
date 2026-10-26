@@ -93,7 +93,7 @@ class AsyncScannerApp(tk.Tk):
         self.status_lbl.grid(row=0, column=0, sticky ='n')
         
         self.scan_btn = ttk.Button(top_frame,text="Connect",
-            command=lambda: asyncio.create_task(self.send_ble('BP:?', 0.1))    )
+            command=lambda: asyncio.create_task(self.send_ble('BP:?'))    )
         #self.scan_btn.pack(side=tk.TOP, anchor='w',)
         self.scan_btn.grid(row=1, column=0, sticky ='n')
         
@@ -322,81 +322,22 @@ class AsyncScannerApp(tk.Tk):
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             self.log_to_ui(f"[BLE]: Started notifications for '{name}' at {target_mac}")
             # self.wakeup()
-            asyncio.create_task(self.send_ble("HW:?", 0.5))
+            asyncio.create_task(self.send_ble("HW:?"))
+            await asyncio.sleep(1.0)
+            asyncio.create_task(self.send_ble("R:?"))
+            await asyncio.sleep(1.0)
+            asyncio.create_task(self.send_ble("BV:?"))
             await asyncio.sleep(0.5)
-            asyncio.create_task(self.send_ble("R:?", 0.5))
+            asyncio.create_task(self.send_ble("BP:?"))
+            await asyncio.sleep(0.5)
+            asyncio.create_task(self.send_ble("C?:?"))
+            await asyncio.sleep(0.5)
+            asyncio.create_task(self.send_ble("TR:?"))
+            await asyncio.sleep(0.5)
         else:
             self.log_to_ui(f"[BLE]: Device with name '{name}' not found.")
 
-    # async def scan_for_ble_devices(self):
-    #     """Scans for BLE devices and automatically connects if 'Squeezer' is found."""
-    #     self.is_scanning = True
-    #     # self.scan_btn.config(state="disabled")
-    #     # self.ble_dropdown.set("Searching for Squeezer...")
-    #     self.log_to_ui("[BLE]: Scanning for 'Squeezer'...")
-    #     logging.info("[BLE]: Starting scan for Squeezer...")
-    #     # attempt =0
-        
-    #     try:
-    #         # Look for devices for up to 4 seconds
-    #         devices = await BleakScanner.discover(timeout=1.0)
-            
-    #         self.discovered_devices.clear()
-    #         # dropdown_options = []
-    #         target_mac: Optional[str] = None
-    #         # max_attempts = 5
-    #         target_mac = None
-
-    #         # for attempt in range(1, max_attempts + 1):
-    #         # self.attempt = 1 + self.attempt
-    #         logging.info(f"[BLE]: Attempt {self.attempt} to discover devices...")
-    #         devices = await BleakScanner.discover(timeout=1.0)
-    #         # logging.info(f"[BLE]: Discovered devices: {[d.address for d in devices]}")
-    #         self.discovered_devices.clear()
-    #         # dropdown_options = []
-    #         target_mac = None
-
-    #         for d in devices:
-    #             name = d.name if d.name else "Unknown Device"
-    #             display_string = f"{name} ({d.address})"
-    #             # logging.info(f"[BLE]: Discovered device: {display_string}") 
-    #             self.discovered_devices[display_string] = d.address
-    #             # dropdown_options.append(display_string)
-
-    #             if name == "Squeezer":
-    #                 target_mac = d.address
-    #                 # logging.info(f"[BLE1]: Found 'Squeezer' at {target_mac}")    
-
-    #             # if dropdown_options:
-    #             #     self.mac_lbl.config(values=dropdown_options)
-
-    #             if target_mac:
-    #                 break
-
-                            
-    #         # Action path conditional on finding the target device
-    #         if target_mac:
-    #             # self.ble_dropdown.set(f"Squeezer Found! ({target_mac})")
-    #             logging.info(f"[BLE]: Found 'Squeezer' at {target_mac}")
-    #             self.log_to_ui(f"[BLE]: Found 'Squeezer' at {target_mac}. Connecting automatically...")
-                
-    #             # Hand control off to the connection manager task
-    #             await self.connect_ble(target_mac)
-    #         else:
-    #             # self.ble_dropdown.set("Squeezer not found.")
-    #             logging.info("[BLE]: 'Squeezer' not found in this scan cycle.")
-    #             self.log_to_ui("[BLE]: Scan finished. 'Squeezer' was not detected in this cycle.")
-    #             # if dropdown_options:
-    #             #     self.connect_btn.config(state="normal")  # Allow fallback manual connect
-                
-    #     except Exception as e:
-    #         # self.log_to_ui(f"[BLE Scan Error]: {e}")
-    #         # self.ble_dropdown.set("Scan failed.")
-    #         logging.info(f"[BLE]: Scan failed with error: {e}")
-    #         # logging.info("[BLE]: Scan attempt finished.")
-    #     finally:
-    #         self.is_scanning = False
-    #         # self.scan_btn.config(state="normal")
+   
 
     async def connect_serial(self):
         """Connects to the background Serial line."""
@@ -431,49 +372,7 @@ class AsyncScannerApp(tk.Tk):
             except Exception as e:
                 self.log_to_ui(f"[Serial RX Error]: {e}")
                 break
-
-    # async def connect_ble(self, mac_address: str):
-    #     """Connects to the user-selected Nordic NUS BLE peripheral."""
-    #     self.log_to_ui(f"[BLE]: Connecting to {mac_address}...")
-    #     # logging.info(f"Attempting to connect to Squeezer device at {mac_address}")
-    #     # self.connect_btn.config(state="disabled")
-    #     # self.scan_btn.config(state="disabled")
-        
-    #     self.ble_client = BleakClient(mac_address)
-    #     try:
-    #         await self.ble_client.connect()
-    #         # self.log_to_ui("[BLE]: Connected to NUS service successfully!")
-    #         logging.info(f"Connected to Squeezer at {mac_address}")
-    #         self.mac_lbl.config(text=mac_address)   #post the mac address
-    #         # Start notifications from the device TX channel
-    #         await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
-    #         await asyncio.sleep(10.1)
-    #         self.status_lbl.config(text="System: Fully Connected (Serial + BLE)")
-    #         logging.info("Fully connected to Squeezer (Serial + BLE)")
-    #         self.send_ble('HW:',0.1)    #HWID
-    #         self.wakeup()
-    #         self.send_btn.config(state="normal")
-    #     except Exception as e:
-    #         self.log_to_ui(f"[BLE Connection Error]: {e}")
-    #         logging.error(f"BLE Connection Error: {e}")
-    #         self.connect_btn.config(state="normal")
-    #         self.scan_btn.config(state="normal")
-    
-    def wakeup(self):
-         #send wakeup stuff
-         logging.info("Sending wakeup commands to BLE device")
-         asyncio.create_task(self.send_ble('HW:',10.5))	#HWID
-         sleep(1)
-         asyncio.create_task(self.send_ble('R:',0.5))
-         sleep(1)
-         asyncio.create_task(self.send_ble('BP:',0.1))
-         asyncio.create_task(self.send_ble('BV:',0.1))
-         asyncio.create_task(self.send_ble('C?:',0.1))
-         asyncio.create_task(self.send_ble('TR:',0.1))
-        #             await self.send_payload('HW:')
-        #             await self.send_payload('HW:')
-        #             await self.send_payload('HW:')
-
+  
     def on_ble_notification(self, characteristic, data: bytearray):
         """Callback processing inbound wireless frames."""
         decoded_text = data.decode('utf-8', errors='ignore').strip()
@@ -483,8 +382,8 @@ class AsyncScannerApp(tk.Tk):
             # decoded_text = data.decode("utf-8").strip()
             SQzrlist=decoded_text.split(':')
             if(SQzrlist[0]!='HF'):
-                self.log_to_ui(f"[RX]: {decoded_text}")
-                
+                self.log_to_ui(f"[RX_BLE]: {decoded_text}")
+                logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
             if SQzrlist[0]=='HF':
                 self.HF_lbl.config(text=decoded_text)
             elif SQzrlist[0]=='HW':
@@ -513,16 +412,16 @@ class AsyncScannerApp(tk.Tk):
               await self.ser_writer.drain()
               self.log_to_ui(f"[TX Serial]: {data.decode().strip()}")    
               
-    async def send_ble(self, data: str,wait_time: float):
+    async def send_ble(self, data: str):
         """Sends data to the BLE device over the Nordic NUS service."""
-        logging.info(f"Sending BLE data: {data}; wait_time={wait_time}")
+        logging.info(f"Sending BLE data: {data};")
         if self.ble_client and self.ble_client.is_connected:
             try:
                 encoded = (data + "\r\n").encode("utf-8")
                 await self.ble_client.write_gatt_char(NUS_RX_UUID, encoded, response=False)
-                self.log_to_ui(f"[TX BLE]: {data}; wait_time={wait_time}")
-                logging.info(f"[BLE_TX]: {data}; wait_time={wait_time}")
-                await asyncio.sleep(wait_time)
+                self.log_to_ui(f"[TX BLE]: {data};")
+                logging.info(f"[BLE_TX]: {data};")
+                
             except Exception as e:
                 self.log_to_ui(f"[BLE TX Error]: {e}")
                 logging.error(f"BLE TX Error: {e}")
@@ -533,7 +432,8 @@ class AsyncScannerApp(tk.Tk):
             
             if not payload_string:
                 return            
-            await self.send_ble(bytes(payload_string, 'utf-8'), 0.1)
+            # await self.send_ble(bytes(payload_string, 'utf-8'), 0.1)
+            await self.send_ble(payload_string)            
             self.input_entry.delete(0, tk.END)
                 
     async def broadcast_data(self, data: bytes):
