@@ -120,7 +120,7 @@ class AsyncScannerApp(tk.Tk):
         self.status_lbl.grid(row=0, column=0, sticky ='n')
         
         self.scan_btn = ttk.Button(top_frame,text="Connect",
-            command=lambda: asyncio.create_task(self.connect_nus_device())    )
+            command=lambda: asyncio.create_task(self.send_ble('BP:?', 0.1))    )
         #self.scan_btn.pack(side=tk.TOP, anchor='w',)
         self.scan_btn.grid(row=1, column=0, sticky ='n')
         
