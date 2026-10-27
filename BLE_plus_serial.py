@@ -34,6 +34,8 @@ class AsyncScannerApp(tk.Tk):
         
         self.serial_port = serial_port
         self.attempt =0
+        self.HFVal=0
+        self.SFVal=0
         
         # Hardware communication objects
         self.ser_reader: Optional[asyncio.StreamReader] = None
@@ -92,17 +94,19 @@ class AsyncScannerApp(tk.Tk):
         self.status_lbl = ttk.Label(top_frame, text="Disconnected")
         self.status_lbl.grid(row=0, column=0, sticky ='n')
         
-        self.scan_btn = ttk.Button(top_frame,text="Connect",
-            command=lambda: asyncio.create_task(self.send_ble('BP:?'))    )
+        self.off_btn = ttk.Button(top_frame,text="GoodBye",
+            command=lambda: asyncio.create_task(self.send_ble('X:'))    )
         #self.scan_btn.pack(side=tk.TOP, anchor='w',)
-        self.scan_btn.grid(row=1, column=0, sticky ='n')
+        self.off_btn.grid(row=1, column=0, sticky ='n')
         
-        self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED, command=lambda: asyncio.create_task(self.send_ble('R:',0.1)))
+#         self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED, command=lambda: asyncio.create_task(self.send_ble('R:',0.1)))
         
-#         self.disconnect_btn.pack(side=tk.TOP, anchor='w')
-        self.disconnect_btn.grid(row=2, column=0, sticky ='n')
+# #         self.disconnect_btn.pack(side=tk.TOP, anchor='w')
+#         self.disconnect_btn.grid(row=2, column=0, sticky ='n')
+        # self.no_device_lbl = ttk.Label(top_frame, text="No Device")
+        # self.no_device_lbl.grid(row=2, column=0, sticky ='n')
         
-        self.mac_lbl = ttk.Label(top_frame, text="00:00:00:00:00:00")
+        self.mac_lbl = ttk.Label(top_frame, text="Device Not Found")
         self.mac_lbl.grid(row=3, column=0, sticky ='n')
         
         self.HWID_lbl = ttk.Label(top_frame, text="HWID")
@@ -123,8 +127,11 @@ class AsyncScannerApp(tk.Tk):
         self.SF_lbl = ttk.Label(top_frame, text="SF:NN.MM", font=("Helvetica", 16, "bold"))
         self.SF_lbl.grid(row=1, column=2)
         
+        self.delta_lbl = ttk.Label(top_frame, text="Delta:--.--", font=("Helvetica", 16, "bold"))
+        self.delta_lbl.grid(row=2, column=2)
+        
         self.TGT_lbl = ttk.Label(top_frame, text="TGT:NN.MM", font=("Helvetica", 16, "bold"))
-        self.TGT_lbl.grid(row=2, column=2) 
+        self.TGT_lbl.grid(row=3, column=2) 
                    
     #2a------ Terminal Frame
     def build_terminal_frame(self):
@@ -339,7 +346,8 @@ class AsyncScannerApp(tk.Tk):
             asyncio.create_task(self.send_ble("TR:?"))
             await asyncio.sleep(0.5)
         else:
-            self.log_to_ui(f"[BLE]: Device with name '{name}' not found.")
+            # self.log_to_ui(f"[BLE]: Device with name '{name}' not found.")
+            self.mac_lbl.configure(text="Device Not Found")
 
    
 
@@ -369,21 +377,53 @@ class AsyncScannerApp(tk.Tk):
             
             try:
                 line = await self.ser_reader.readline()
-                logging.info(f"[RX Serial]: raw line: {line}")
+                # logging.info(f"[RX Serial]: raw line: {line}")
                 if not line:
                     break
                 ser_line = line.decode('utf-8', errors='ignore').strip()
-                logging.info(f"[RX Serial]: {ser_line}")
-                if line.find('HF') == -1:
-                    self.log_to_ui(f"[RX Serial]: {line.decode('utf-8', errors='ignore').strip()}")
-                else:
-                    ser_split= line.split(':')
-                    logging.info(f"[RX Serial]: HF data: {ser_split}")
+                # logging.info(f"[RX Serial]: {ser_line}")
+                # self.log_to_ui(f"[RX Serial]: {ser_line}")
+                if ser_line.find('HF') == -1:
+                    self.log_to_ui(f"[RX Serial]: {ser_line}")
+                    # logging.info(f"[RX Serial]: non-HF data: {ser_line}")
+                else:  
+                    ser_split= ser_line.split(':')
+                    if(len(ser_split) < 2):
+                        logging.warning(f"[RX Serial]: Malformed HF data: {ser_line}")
+                        break
+                        
+                    # logging.info(f"[RX Serial]: HF data: {ser_split}")
+                    # self.log_to_ui(f"[RX Serial]: HF data: {ser_split}")
+                    delval=float(ser_split[2])-self.HFVal
+                    self.delta_lbl.config(text='Delta:'+str(delval))
+                    self.SFVal=float(ser_split[2])
+                    self.SF_lbl.config(text='SF:'+ser_split[2])
+                    # self.log_to_ui(f"[RX Serial]: HF data: HF:{self.HFVal}:SF:{self.SFVal}")
             except asyncio.CancelledError:
+                logging.info("[RX Serial]: CancelledError received, breaking loop.")
                 break
             except Exception as e:
+                logging.error(f"[RX Serial]: Exception: {e}")
                 self.log_to_ui(f"[Serial RX Error]: {e}")
                 break
+
+        # Loop ended (EOF/error): mark disconnected so serial_supervisor_loop reconnects
+        if self.ser_writer:
+            try:
+                self.ser_writer.close()
+            except Exception:
+                pass
+        self.ser_reader = None
+        self.ser_writer = None
+        if self.is_running:
+            self.log_to_ui("[Serial]: Disconnected")
+
+    async def serial_supervisor_loop(self):
+        """Retries the serial connection whenever it is down."""
+        while self.is_running:
+            if self.ser_reader is None:
+                await self.connect_serial()
+            await asyncio.sleep(2)
   
     def on_ble_notification(self, characteristic, data: bytearray):
         """Callback processing inbound wireless frames."""
@@ -398,6 +438,10 @@ class AsyncScannerApp(tk.Tk):
                 logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
             if SQzrlist[0]=='HF':
                 self.HF_lbl.config(text=decoded_text)
+                splitHF=decoded_text.split(':')
+                self.HFVal=float(splitHF[1])
+                delval=self.SFVal-self.HFVal
+                self.delta_lbl.config(text='Delta:'+str(delval))
             elif SQzrlist[0]=='HW':
                 self.HWID_lbl.config(text='HWID:'+SQzrlist[1])
             elif SQzrlist[0]=='BP':
@@ -477,9 +521,10 @@ class AsyncScannerApp(tk.Tk):
         self.HF_lbl.configure(text="HF:--.--")
         self.log_to_ui("[SYS] BLE Disconnected")
         logging.info("BLE client disconnected.")
-        self.scan_btn.config(state=tk.NORMAL)
-        self.disconnect_btn.config(state=tk.DISABLED)
+        # self.scan_btn.config(state=tk.NORMAL)
+        # self.disconnect_btn.config(state=tk.DISABLED)
         self.set_widgets_state(tk.DISABLED)  # Gray out all macros
+        
 
     async def gui_updater_loop(self):
         """Explicit layout pump executing Tkinter frames every 10ms."""
@@ -497,10 +542,8 @@ class AsyncScannerApp(tk.Tk):
 
     async def main_lifecycle(self):
         """Application orchestrator sequencing configurations."""
-        # Initialize serial connection immediately upon startup
-        await self.connect_serial()
-        # Start the BLE supervisor loop in the background
         logging.info("Starting main lifecycle...")
+        serial_task = asyncio.create_task(self.serial_supervisor_loop())
         scan_task = asyncio.create_task(self.ble_supervisor_loop())
         # logging.info("BLE supervisor loop started.")
         
@@ -509,6 +552,7 @@ class AsyncScannerApp(tk.Tk):
             logging.info("GUI updater loop exited.")
         finally:
             scan_task.cancel()
+            serial_task.cancel()
             if self.ble_client and self.ble_client.is_connected:
                 await self.ble_client.disconnect()
                 logging.info("BLE client disconnected.")
