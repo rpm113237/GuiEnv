@@ -394,7 +394,7 @@ class AsyncScannerApp(tk.Tk):
                         
                     # logging.info(f"[RX Serial]: HF data: {ser_split}")
                     # self.log_to_ui(f"[RX Serial]: HF data: {ser_split}")
-                    delval=float(ser_split[2])-self.HFVal
+                    delval=format(float(ser_split[2])-self.HFVal, '.2f')
                     self.delta_lbl.config(text='Delta:'+str(delval))
                     self.SFVal=float(ser_split[2])
                     self.SF_lbl.config(text='SF:'+ser_split[2])
@@ -441,7 +441,7 @@ class AsyncScannerApp(tk.Tk):
                 splitHF=decoded_text.split(':')
                 self.HFVal=float(splitHF[1])
                 delval=self.SFVal-self.HFVal
-                self.delta_lbl.config(text='Delta:'+str(delval))
+                self.delta_lbl.config(text='Delta:'+format(delval, '.2f'))
             elif SQzrlist[0]=='HW':
                 self.HWID_lbl.config(text='HWID:'+SQzrlist[1])
             elif SQzrlist[0]=='BP':
