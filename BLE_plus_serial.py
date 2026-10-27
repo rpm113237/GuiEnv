@@ -249,7 +249,7 @@ class AsyncScannerApp(tk.Tk):
             "Cal?": "C:?",
             "HWID": "HW:?",
             "SW Rev":"R:?",
-            "OFF":"X"
+            "TBD":"12345"
         }
 
         # Dynamically loop and instantiate macro buttons
