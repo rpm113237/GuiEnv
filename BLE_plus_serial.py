@@ -67,7 +67,7 @@ class AsyncScannerApp(tk.Tk):
 
         # UI Initialization
         self.title("Squeezer GUI with Serial")
-        self.geometry("800x1400")
+        self.geometry("800x1280")
                
         # Track all dynamically generated preset buttons for mass state tracking
         self.macro_buttons = []
@@ -91,13 +91,16 @@ class AsyncScannerApp(tk.Tk):
         top_frame.columnconfigure(1, weight=1)
         top_frame.columnconfigure(2, weight=1)
 
-        self.status_lbl = ttk.Label(top_frame, text="Disconnected")
-        self.status_lbl.grid(row=0, column=0, sticky ='n')
+        self.ser_stat_lbl = ttk.Label(top_frame, text="Serial:Disc")
+        self.ser_stat_lbl.grid(row=0, column=0, sticky ='n')
+        
+        self.ble_stat_lbl = ttk.Label(top_frame, text="BLE:Disc")
+        self.ble_stat_lbl.grid(row=1, column=0, sticky ='n')
         
         self.off_btn = ttk.Button(top_frame,text="GoodBye",
             command=lambda: asyncio.create_task(self.send_ble('X:'))    )
         #self.scan_btn.pack(side=tk.TOP, anchor='w',)
-        self.off_btn.grid(row=1, column=0, sticky ='n')
+        self.off_btn.grid(row=2, column=0, sticky ='n')
         
 #         self.disconnect_btn = ttk.Button(top_frame,text="Disconnect",state=tk.DISABLED, command=lambda: asyncio.create_task(self.send_ble('R:',0.1)))
         
@@ -106,7 +109,7 @@ class AsyncScannerApp(tk.Tk):
         # self.no_device_lbl = ttk.Label(top_frame, text="No Device")
         # self.no_device_lbl.grid(row=2, column=0, sticky ='n')
         
-        self.mac_lbl = ttk.Label(top_frame, text="Device Not Found")
+        self.mac_lbl = ttk.Label(top_frame, text="00:00:00:00:00:00")
         self.mac_lbl.grid(row=3, column=0, sticky ='n')
         
         self.HWID_lbl = ttk.Label(top_frame, text="HWID")
@@ -137,12 +140,12 @@ class AsyncScannerApp(tk.Tk):
     def build_terminal_frame(self):
         """Builds the terminal frame for displaying received data."""
         
-        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", labelanchor = 'n',relief ='raised', borderwidth=15)
+        middle_frame = ttk.LabelFrame(self, text=" Received Data (TX) ", labelanchor = 'n',relief ='raised', borderwidth=5)
         middle_frame.pack(fill=tk.X, expand=False, padx=10, pady=5)
 
-        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=15,
+        self.terminal = tk.Text(middle_frame, wrap=tk.WORD, state=tk.DISABLED, bg="grey10", relief="raised", bd=5,
                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
-        self.terminal.pack(side = tk.LEFT,padx=5, pady=5)
+        self.terminal.pack(side = tk.LEFT,fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         #2b-----calib frame        
         calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
@@ -200,36 +203,37 @@ class AsyncScannerApp(tk.Tk):
         
         # 2. Define Columns
         # Use internal IDs for code management; these do not have to be the text
-        columns = ("CalWt", "CalVal")
+        columns = ("CalPt","CalWt", "CalVal")
 
         # 3. Create Treeview Widget        
-        table = ttk.Treeview(calibdata_frame, columns=columns, show="headings", selectmode="browse")
+        self.table = ttk.Treeview(calibdata_frame, columns=columns, show="headings", selectmode="browse")
                 
         sqfont = tkfont.Font(root=self, font="TkDefaultFont")
         #to calculate column width based on font size
 
         # 4. Define Headings (What the user sees at the top)
-        table.heading("CalWt", text="CalWt")
-        table.heading("CalVal", text="CalVal")
+        self.table.heading("CalPt", text="CalPt")
+        self.table.heading("CalWt", text="CalWt")
+        self.table.heading("CalVal", text="CalVal")
         
         # 5. Define Column Properties
         # anchor="w" aligns text left (West), "center" aligns center
-        table.column("CalWt", width=sqfont.measure('123.456')+10, minwidth=1, anchor="center")
-        table.column("CalVal", width=sqfont.measure('12345.5678')+10, minwidth=1, anchor="center")
+        self.table.column("CalPt", width=sqfont.measure('CalPt ')+10, minwidth=1, anchor="center")
+        self.table.column("CalWt", width=sqfont.measure('123.456')+10, minwidth=1, anchor="center")
+        self.table.column("CalVal", width=sqfont.measure('12345.5678')+10, minwidth=1, anchor="center")
 
         ncalpts=15  #desired number of elements
-        data_list = [(str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
-        
+        data_list = [(str(i), str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
         # "show='headings'" hides the default hierarchical first column (tree arrow)
         for row in data_list:
-            table.insert("", tk.END, values=row)
+            self.table.insert("", tk.END, values=row)
 
         # 7. Add a Scrollbar
-        scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=table.yview)
-        table.configure(yscrollcommand=scrollbar.set)
+        scrollbar = ttk.Scrollbar(calibdata_frame, orient=tk.VERTICAL, command=self.table.yview)
+        self.table.configure(yscrollcommand=scrollbar.set)
 
         # 8. Pack layout elements
-        table.grid(row=0, column=0, sticky = 'n')
+        self.table.grid(row=0, column=0, sticky = 'n')
         scrollbar.grid(row=0,column=1,sticky='ns')
         
         self.caldelta_lbl=tk.Label(calibdata_frame, text="Delta", bg='pink',fg='blue')
@@ -246,25 +250,38 @@ class AsyncScannerApp(tk.Tk):
             "Batt %": "bp:?",
             'Batt V':'BV:?',
             "Tare": "TR:?",
-            "Cal?": "C:?",
+            "Cal": "C:?",
             "HWID": "HW:?",
             "SW Rev":"R:?",
-            "TBD":"12345"
+            "TBD1":"12345",
+            "TBD2":"67890",
+            "TBD3":"ABCDE"
         }
 
         # Dynamically loop and instantiate macro buttons
         for label, command_string in presets.items():
+            # if command_string.startswith("C:"):
+            #     for item in self.table.get_children():
+            #         self.table.delete(item)
             btn = ttk.Button(
                 macro_frame,
                 text=label,
                 state=tk.DISABLED,
                 # Pass the unique command payload through lambda into our scheduler
-                command=lambda cmd=command_string: asyncio.create_task(self.send_ble(cmd)),
+                command=lambda cmd=command_string: self.SndMacroCmd(cmd),
             )
 
             btn.pack(side=tk.LEFT,expand=True)
             self.macro_buttons.append(btn)
-
+            
+    def SndMacroCmd(self, command_string):
+        """Clears all entries from the calibration table."""
+        # logging.info(f"Sending macro command: {command_string}")
+        if command_string.startswith("C:"):
+            for item in self.table.get_children():
+                self.table.delete(item)
+        asyncio.create_task(self.send_ble(command_string))
+        
         # --- 4. Manual Transmit Panel ---
     def build_manual_transmit_frame(self):
         """Builds the manual transmit panel."""
@@ -329,7 +346,7 @@ class AsyncScannerApp(tk.Tk):
             await self.ble_client.start_notify(NUS_TX_UUID, self.on_ble_notification)
             self.log_to_ui(f"[BLE]: Started notifications for '{name}' at {target_mac}")
             self.set_widgets_state(tk.NORMAL)  # Wake up all buttons
-            self.status_lbl.config(text="System: Serial and BLE Connected.")
+            self.ble_stat_lbl.config(text="BLE:Connected.")
             logging.info(f"[BLE]: Widgets set to NORMAL after connecting to '{name}'")
             self.mac_lbl.configure(text=target_mac)
             # self.wakeup()
@@ -347,7 +364,7 @@ class AsyncScannerApp(tk.Tk):
             await asyncio.sleep(0.5)
         else:
             # self.log_to_ui(f"[BLE]: Device with name '{name}' not found.")
-            self.mac_lbl.configure(text="Device Not Found")
+            self.mac_lbl.configure(text="00:00:00:00:00:00")
 
    
 
@@ -356,7 +373,7 @@ class AsyncScannerApp(tk.Tk):
         if serial_asyncio is None:
             message = "serial_asyncio is unavailable; serial connection skipped."
             self.log_to_ui(f"[Serial Error]: {message}")
-            self.status_lbl.config(text="Serial unavailable")
+            self.ser_stat_lbl.config(text="Serial unavailable")
             return
 
         try:
@@ -365,45 +382,45 @@ class AsyncScannerApp(tk.Tk):
             )
             self.log_to_ui(f"[Serial]: Connected safely to {self.serial_port}")
             asyncio.create_task(self.read_serial_loop())
-            self.status_lbl.config(text="System: Serial Connected. Ready to scan BLE.")
+            self.ser_stat_lbl.config(text="Serial:Connected")
         except Exception as e:
             self.log_to_ui(f"[Serial Error]: Connection failed: {e}")
-            self.status_lbl.config(text="System: Serial initialization failed.")
+            self.ser_stat_lbl.config(text="Sys: Serial init failed.")
 
     async def read_serial_loop(self):
         """Reads characters streaming from the USB serial device."""
-        logging.info(f"[RX Serial]: self.is_running={self.is_running}ready for data...")
+        logging.info(f"[RX-Ser]: self.is_running={self.is_running}ready for data...")
         while self.is_running and self.ser_reader:
             
             try:
                 line = await self.ser_reader.readline()
-                # logging.info(f"[RX Serial]: raw line: {line}")
+                # logging.info(f"[RX-Ser]: raw line: {line}")
                 if not line:
                     break
                 ser_line = line.decode('utf-8', errors='ignore').strip()
-                # logging.info(f"[RX Serial]: {ser_line}")
-                # self.log_to_ui(f"[RX Serial]: {ser_line}")
+                # logging.info(f"[RX-Ser]: {ser_line}")
+                # self.log_to_ui(f"[RX-Ser]: {ser_line}")
                 if ser_line.find('HF') == -1:
-                    self.log_to_ui(f"[RX Serial]: {ser_line}")
-                    # logging.info(f"[RX Serial]: non-HF data: {ser_line}")
+                    self.log_to_ui(f"[RX-Ser]: {ser_line}")
+                    # logging.info(f"[RX-Ser]: non-HF data: {ser_line}")
                 else:  
                     ser_split= ser_line.split(':')
                     if(len(ser_split) < 2):
-                        logging.warning(f"[RX Serial]: Malformed HF data: {ser_line}")
+                        logging.warning(f"[RX-Ser]: Malformed HF data: {ser_line}")
                         break
                         
-                    # logging.info(f"[RX Serial]: HF data: {ser_split}")
-                    # self.log_to_ui(f"[RX Serial]: HF data: {ser_split}")
+                    # logging.info(f"[RX-Ser]: HF data: {ser_split}")
+                    # self.log_to_ui(f"[RX-Ser]: HF data: {ser_split}")
                     delval=format(float(ser_split[2])-self.HFVal, '.2f')
                     self.delta_lbl.config(text='Delta:'+str(delval))
                     self.SFVal=float(ser_split[2])
                     self.SF_lbl.config(text='SF:'+ser_split[2])
-                    # self.log_to_ui(f"[RX Serial]: HF data: HF:{self.HFVal}:SF:{self.SFVal}")
+                    # self.log_to_ui(f"[RX-Ser]: HF data: HF:{self.HFVal}:SF:{self.SFVal}")
             except asyncio.CancelledError:
-                logging.info("[RX Serial]: CancelledError received, breaking loop.")
+                logging.info("[RX-Ser]: CancelledError received, breaking loop.")
                 break
             except Exception as e:
-                logging.error(f"[RX Serial]: Exception: {e}")
+                logging.error(f"[RX-Ser]: Exception: {e}")
                 self.log_to_ui(f"[Serial RX Error]: {e}")
                 break
 
@@ -433,9 +450,11 @@ class AsyncScannerApp(tk.Tk):
         try:
             # decoded_text = data.decode("utf-8").strip()
             SQzrlist=decoded_text.split(':')
-            if(SQzrlist[0]!='HF'):
-                self.log_to_ui(f"[RX_BLE]: {decoded_text}")
-                logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
+            
+            # if(SQzrlist[0]!='HF'):
+            #     logging.info(f"Received Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
+            #     self.log_to_ui(f"[RX_BLE]: {decoded_text}")
+            #     logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
             if SQzrlist[0]=='HF':
                 self.HF_lbl.config(text=decoded_text)
                 splitHF=decoded_text.split(':')
@@ -454,9 +473,13 @@ class AsyncScannerApp(tk.Tk):
                 self.CalCk_lbl.config(text='Cal?:'+SQzrlist[1])
             elif SQzrlist[0]=='TR':
                 self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
-            
+            elif SQzrlist[0]=='C':
+                #  logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
+                #  Sqzrlist1=SQzrlist[1].split(',')
+                 self.table.insert("",tk.END, values=SQzrlist[1].split(','))            
             else:
-                self.log_to_ui(f"[RX]: {decoded_text}")
+                self.log_to_ui(f"[RX-BLE]: {decoded_text}")
+                logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
         except UnicodeDecodeError:
             self.log_to_ui(f"[RX Hex]: {data.hex().upper()}")
         
@@ -470,7 +493,7 @@ class AsyncScannerApp(tk.Tk):
               
     async def send_ble(self, data: str):
         """Sends data to the BLE device over the Nordic NUS service."""
-        logging.info(f"Sending BLE data: {data}")
+        # logging.info(f"Sending BLE data: {data}")
         if self.ble_client and self.ble_client.is_connected:
             try:
                 encoded = (data + "\r\n").encode("utf-8")
@@ -484,10 +507,10 @@ class AsyncScannerApp(tk.Tk):
                 
     async def send_manual_input(self):
             """Extracts text out of input bar and routes it directly to send_payload."""
-            payload_string = self.input_entry.get()
-            
+            payload_string = self.input_entry.get()            
             if not payload_string:
-                return            
+                return    
+            # logging.info(f"[TX Manual Input]: {payload_string}")
             # await self.send_ble(bytes(payload_string, 'utf-8'), 0.1)
             await self.send_ble(payload_string)            
             self.input_entry.delete(0, tk.END)
@@ -516,10 +539,17 @@ class AsyncScannerApp(tk.Tk):
             btn.config(state=state)
             
     def on_nus_disconnect(self, client):
-        self.status_lbl.config(text="Disconnected ❌")
+        if not self.ser_reader:
+            self.ser_stat_lbl.config(text="Disconnected ❌")
+            self.SF_lbl.configure(text="SF:--.--")
+        self.ble_stat_lbl.config(text="Disconnected ❌")
         self.mac_lbl.configure(text="00:00:00:00:00:00")
         self.HF_lbl.configure(text="HF:--.--")
+        self.SF_lbl.configure(text="SF:--.--")
+        self.delta_lbl.configure(text="Δ:--.--")
         self.log_to_ui("[SYS] BLE Disconnected")
+        for item in self.table.get_children():
+            self.table.delete(item)
         logging.info("BLE client disconnected.")
         # self.scan_btn.config(state=tk.NORMAL)
         # self.disconnect_btn.config(state=tk.DISABLED)
