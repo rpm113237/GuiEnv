@@ -24,6 +24,8 @@ NUS_TX_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # Read/Notify from BLE dev
 
 TARGET_DEVICE_NAME = "Squeezer"
 
+SCALE_MAC="10:20:BA:2E:6D:A5"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 logging.getLogger("asyncio").setLevel(logging.INFO)
 
@@ -56,7 +58,13 @@ class AsyncScannerApp(tk.Tk):
         # Configure the 'Treeview.Heading' style globally
         self.style.configure("Treeview.Heading",background="light blue",foreground="green",font=("Helvetica", 11, "bold"))
         # Configure the frame container style
-        self.style.configure("Custom.TLabelframe",background="#f0f0f0",bordercolor='red',borderwidth=2,relief="raised",)
+        self.style.configure("Custom.TLabelframe",
+                             background="#f0f0f0",
+                             bordercolor='red',
+                             lightcolor='white',
+                             darkcolor='darkred',
+                             borderwidth=10,
+                             relief="raised",)
         # Configure the title text inside the labelframe
         self.style.configure("Custom.TLabelframe.Label",background="#f0f0f0",foreground = 'magenta',font=("Helvetica", 16, "bold"),)
         # 
@@ -148,7 +156,14 @@ class AsyncScannerApp(tk.Tk):
         self.terminal.pack(side = tk.LEFT,fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         #2b-----calib frame        
-        calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
+        # calib_frame = ttk.LabelFrame(self, style="Custom.TLabelframe",text="Calibration Frame", labelanchor ='n')
+        calib_frame = tk.LabelFrame(
+        self, text="Calibration Frame", labelanchor="n",
+        bg="#f0f0f0", fg="magenta",
+        font=("Helvetica", 16, "bold"),
+        borderwidth=8, relief="raised",
+        highlightbackground="red", highlightthickness=2,
+        )
         calib_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         frame = ttk.Frame(self, relief="sunken", borderwidth=45, width=200, height=10)
         frame.pack(padx=20)
@@ -184,10 +199,11 @@ class AsyncScannerApp(tk.Tk):
         
         self.calib_doit_btn = ttk.Button(
             calibhdr_frame,
-            style="Warning.TButton",
+            # style="Warning.TButton",
             text="Do It",
             #command=lambda: asyncio.create_task(self.connect_nus_device()),
-            command= lambda: print('Do It(TODO)'))        
+            # command= lambda: print('Do It(TODO)')) 
+            command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}")))       
         self.calib_doit_btn.pack(side=tk.RIGHT, padx=5)
         
         self.calib_ckcal_btn = ttk.Button(
@@ -336,8 +352,12 @@ class AsyncScannerApp(tk.Tk):
         for d in devices:
             if d.name == name:
                 target_mac = d.address
-                logging.info(f"[BLE]: Found '{name}' at {target_mac}")
-                break
+                if target_mac != SCALE_MAC:
+                    logging.info(f"[BLE]: Found '{name}' at {target_mac}")
+                    break
+                else:
+                    logging.info(f"[BLE]: Ignored '{name}' at {target_mac} (matches SCALE_MAC)")
+                    target_mac = None  # Ignore this device and continue searching
         # logging.info(f"[BLE]: Target MAC for '{name}' is {target_mac}")
         if target_mac:
             self.ble_client = BleakClient(target_mac,disconnected_callback=self.on_nus_disconnect)
@@ -474,9 +494,9 @@ class AsyncScannerApp(tk.Tk):
             elif SQzrlist[0]=='TR':
                 self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
             elif SQzrlist[0]=='C':
-                #  logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
+                logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
                 #  Sqzrlist1=SQzrlist[1].split(',')
-                 self.table.insert("",tk.END, values=SQzrlist[1].split(','))            
+                self.table.insert("",tk.END, values=SQzrlist[1].split(','))            
             else:
                 self.log_to_ui(f"[RX-BLE]: {decoded_text}")
                 logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
