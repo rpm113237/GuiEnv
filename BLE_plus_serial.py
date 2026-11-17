@@ -225,16 +225,17 @@ class AsyncScannerApp(tk.Tk):
             calibhdr_frame,
 #             style="Warning.TButton",
             text="MP Cal\nEND",
-            command=lambda: asyncio.create_task(self.send_ble('C?:?')))
-        self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)  
+            command=lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"),
+        )
+        self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)         
 
         self.calib_Auto_btn = ttk.Button(
                     calibhdr_frame,
                     style="Warning.TButton",
                     text=" Auto \n Cal ",
-                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
-                    command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))                   
-        self.calib_Auto_btn.pack(side=tk.RIGHT, padx=15)      
+                    # command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))   
+                    command = lambda: logging.info("Auto Cal triggered"))                
+        self.calib_Auto_btn.pack(side=tk.RIGHT, padx=25)      
         
         calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
         calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
@@ -315,7 +316,7 @@ class AsyncScannerApp(tk.Tk):
     def SndMacroCmd(self, command_string):
         """Clears all entries from the calibration table."""
         # logging.info(f"Sending macro command: {command_string}")
-        if command_string.startswith("C:"):
+        if command_string.startswith("CS:"):
             for item in self.table.get_children():
                 self.table.delete(item)
         asyncio.create_task(self.send_ble(command_string))
