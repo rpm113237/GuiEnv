@@ -298,7 +298,7 @@ class AsyncScannerApp(tk.Tk):
             "Batt %": "bp:?",
             'Batt V':'BV:?',
             "Tare": "TR:?",
-            "Cal": "C:?",
+            "CalCk": "C:?",
             "HWID": "HW:?",
             "SW Rev":"R:?",
             "TBD1":"12345",
