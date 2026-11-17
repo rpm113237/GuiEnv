@@ -165,13 +165,22 @@ class AsyncScannerApp(tk.Tk):
         highlightbackground="red", highlightthickness=2,
         )
         calib_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        frame = ttk.Frame(self, relief="sunken", borderwidth=45, width=200, height=10)
-        frame.pack(padx=20)
+        CalCkframe = ttk.Frame(calib_frame, relief="sunken")
+        CalCkframe.pack(padx=20)
 #         self.calib_lbl = tk.Text(calib_frame, wrap=tk.WORD, state=tk.DISABLED, bg="light blue", relief="raised", bd=5,
 #                                 fg="#00ff00", font=("Consolas", 10, 'bold'))
 #         self.calib_lbl.pack(padx=5, pady=5)
-        self.CalCk_lbl = tk.Label(calib_frame, text="UnCalibrated", fg='white', bg = 'red')
-        self.CalCk_lbl.pack()
+        self.CalCk_lbl = tk.Label(CalCkframe, text="UnCalibrated", fg='red', bg = 'white',font=("Helvetica", 16, "bold"))
+        self.CalCk_lbl.pack(side=tk.LEFT)
+
+        self.calib_CalCk_btn = ttk.Button(
+            CalCkframe,
+            style="Warning.TButton",
+            text=" Calib?",
+            # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+            command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))                   
+        self.calib_CalCk_btn.pack(side= tk.RIGHT,padx=5)
+
         
         calibhdr_frame = ttk.Frame(calib_frame,relief ='raised',borderwidth=15)        
         calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
@@ -206,19 +215,19 @@ class AsyncScannerApp(tk.Tk):
         self.calib_snglpt_btn.pack(side=tk.RIGHT, padx=5)
 
         self.calib_mpstart_btn = ttk.Button(
-                    calibhdr_frame,
-                    # style="Warning.TButton",
-                    text=" MP \nStart",
-                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
-                    command = lambda: self.SndMacroCmd('CS:'+f"{self.SFVal:.2f}"))                   
+            calibhdr_frame,
+            # style="Warning.TButton",
+            text=" MP \nStart",
+            # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+            command = lambda: self.SndMacroCmd('CS:'+f"{self.SFVal:.2f}"))                   
         self.calib_mpstart_btn.pack(side=tk.RIGHT, padx=5)
 
         self.calib_multipt_btn = ttk.Button(
-                    calibhdr_frame,
-                    # style="Warning.TButton",
-                    text=" MP \nCal ",
-                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
-                    command = lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"))                   
+            calibhdr_frame,
+            # style="Warning.TButton",
+            text=" MP \nCal ",
+            # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+            command = lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"))                   
         self.calib_multipt_btn.pack(side=tk.RIGHT, padx=5)
         
         self.calib_mpend_btn = ttk.Button(
@@ -230,11 +239,11 @@ class AsyncScannerApp(tk.Tk):
         self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)         
 
         self.calib_Auto_btn = ttk.Button(
-                    calibhdr_frame,
-                    style="Warning.TButton",
-                    text=" Auto \n Cal ",
-                    # command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))   
-                    command = lambda: logging.info("Auto Cal triggered"))                
+            calibhdr_frame,
+            style="Warning.TButton",
+            text=" Auto \n Cal ",
+            # command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))   
+            command = lambda: logging.info("Auto Cal triggered"))                
         self.calib_Auto_btn.pack(side=tk.RIGHT, padx=25)      
         
         calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
