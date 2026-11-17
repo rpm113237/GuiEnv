@@ -54,7 +54,7 @@ class AsyncScannerApp(tk.Tk):
         self.style.configure('TLabel', background = 'light blue', foreground='magenta',font =('Helvetica',12,'bold'))
         self.style.configure('TLabelFrame', relief='raised', borderwidth =5)
         self.style.configure("TFrame", background ='light blue', bordercolor='yellow',borderwidth = 50, relief='groove')
-        self.style.configure("Warning.TButton", foreground = 'red', background='light blue', font=('Helvetica',16,'bold'))
+        self.style.configure("Warning.TButton", foreground = 'red', background='light yellow', font=('Helvetica',16,'bold'))
         # Configure the 'Treeview.Heading' style globally
         self.style.configure("Treeview.Heading",background="light blue",foreground="green",font=("Helvetica", 11, "bold"))
         # Configure the frame container style
@@ -197,22 +197,44 @@ class AsyncScannerApp(tk.Tk):
         self.calibtare_lbl=tk.Label(calibhdr_frame, text="Tare\n----", bg='pink',fg='blue')
         self.calibtare_lbl.pack(side =tk.LEFT)
         
-        self.calib_doit_btn = ttk.Button(
+        self.calib_snglpt_btn = ttk.Button(
             calibhdr_frame,
             # style="Warning.TButton",
-            text="Do It",
-            #command=lambda: asyncio.create_task(self.connect_nus_device()),
-            # command= lambda: print('Do It(TODO)')) 
-            command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}")))       
-        self.calib_doit_btn.pack(side=tk.RIGHT, padx=5)
+            text=" SP \nCal ",
+            # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+            command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))                   
+        self.calib_snglpt_btn.pack(side=tk.RIGHT, padx=5)
+
+        self.calib_mpstart_btn = ttk.Button(
+                    calibhdr_frame,
+                    # style="Warning.TButton",
+                    text=" MP \nStart",
+                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+                    command = lambda: self.SndMacroCmd('CS:'+f"{self.SFVal:.2f}"))                   
+        self.calib_mpstart_btn.pack(side=tk.RIGHT, padx=5)
+
+        self.calib_multipt_btn = ttk.Button(
+                    calibhdr_frame,
+                    # style="Warning.TButton",
+                    text=" MP \nCal ",
+                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+                    command = lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"))                   
+        self.calib_multipt_btn.pack(side=tk.RIGHT, padx=5)
         
-        self.calib_ckcal_btn = ttk.Button(
+        self.calib_mpend_btn = ttk.Button(
             calibhdr_frame,
 #             style="Warning.TButton",
-            text="Check\nCal",
-            #command=lambda: asyncio.create_task(self.connect_nus_device()),
-            command= lambda: print('check calibration (TODO)'))        
-        self.calib_ckcal_btn.pack(side=tk.RIGHT, padx=5)        
+            text="MP Cal\nEND",
+            command=lambda: asyncio.create_task(self.send_ble('C?:?')))
+        self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)  
+
+        self.calib_Auto_btn = ttk.Button(
+                    calibhdr_frame,
+                    style="Warning.TButton",
+                    text=" Auto \n Cal ",
+                    # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
+                    command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))                   
+        self.calib_Auto_btn.pack(side=tk.RIGHT, padx=15)      
         
         calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
         calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
@@ -495,8 +517,9 @@ class AsyncScannerApp(tk.Tk):
                 self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
             elif SQzrlist[0]=='C':
                 logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
-                #  Sqzrlist1=SQzrlist[1].split(',')
-                self.table.insert("",tk.END, values=SQzrlist[1].split(','))            
+                Sqzrlist1=SQzrlist[1].split(',')
+                logging.info(f"Parsed C command values: {Sqzrlist1}")
+                self.table.insert("",tk.END, values=Sqzrlist1)            
             else:
                 self.log_to_ui(f"[RX-BLE]: {decoded_text}")
                 logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
