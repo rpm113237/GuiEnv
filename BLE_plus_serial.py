@@ -324,10 +324,7 @@ class AsyncScannerApp(tk.Tk):
             
     def SndMacroCmd(self, command_string):
         """Clears all entries from the calibration table."""
-        # logging.info(f"Sending macro command: {command_string}")
-        if command_string.startswith("CS:"):
-            for item in self.table.get_children():
-                self.table.delete(item)
+        # logging.info(f"Sending macro command: {command_string}")        
         asyncio.create_task(self.send_ble(command_string))
         
         # --- 4. Manual Transmit Panel ---
@@ -525,7 +522,10 @@ class AsyncScannerApp(tk.Tk):
                 self.CalCk_lbl.config(text='Cal?:'+SQzrlist[1])
             elif SQzrlist[0]=='TR':
                 self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
-            elif SQzrlist[0]=='C':
+            elif SQzrlist[0]=='CS' or SQzrlist[0]=='CM'or SQzrlist[0]=='CE':
+                if SQzrlist[0]=='CS':
+                    for item in self.table.get_children():
+                        self.table.delete(item)
                 logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
                 Sqzrlist1=SQzrlist[1].split(',')
                 logging.info(f"Parsed C command values: {Sqzrlist1}")
@@ -546,7 +546,7 @@ class AsyncScannerApp(tk.Tk):
               
     async def send_ble(self, data: str):
         """Sends data to the BLE device over the Nordic NUS service."""
-        # logging.info(f"Sending BLE data: {data}")
+        logging.info(f"Sending BLE data: {data}")
         if self.ble_client and self.ble_client.is_connected:
             try:
                 encoded = (data + "\r\n").encode("utf-8")
