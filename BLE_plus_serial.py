@@ -234,7 +234,7 @@ class AsyncScannerApp(tk.Tk):
             calibhdr_frame,
 #             style="Warning.TButton",
             text="MP Cal\nEND",
-            command=lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"),
+            command=lambda: self.SndMacroCmd('CE:'+f"{self.SFVal:.2f}"),
         )
         self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)         
 
@@ -270,9 +270,11 @@ class AsyncScannerApp(tk.Tk):
         self.table.column("CalWt", width=sqfont.measure('123.456')+10, minwidth=1, anchor="center")
         self.table.column("CalVal", width=sqfont.measure('12345.5678')+10, minwidth=1, anchor="center")
 
-        ncalpts=15  #desired number of elements
-        data_list = [(str(i), str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
+        ncalpts=10  #desired number of elements
+        # data_list = [(str(i), str(i * 20 + 10), "{:.2f}".format(10000+random.uniform(-1000,1000))) for i in range(ncalpts)]
+        data_list = [(str(i), 'nn.mm', 'xxxx.yy') for i in range(ncalpts)]
         # "show='headings'" hides the default hierarchical first column (tree arrow)
+        # data_list = ['-', '---', '----']  # initialize an empty list for calibration data
         for row in data_list:
             self.table.insert("", tk.END, values=row)
 
@@ -284,8 +286,11 @@ class AsyncScannerApp(tk.Tk):
         self.table.grid(row=0, column=0, sticky = 'n')
         scrollbar.grid(row=0,column=1,sticky='ns')
         
-        self.caldelta_lbl=tk.Label(calibdata_frame, text="Delta", bg='pink',fg='blue')
-        self.caldelta_lbl.grid(row = 1, column = 0, sticky = 'w')        
+        self.caldelta_lbl=tk.Label(calibdata_frame, text="Delta", bg='ivory',fg='magenta')
+        self.caldelta_lbl.grid(row = 0, column = 2, sticky = 'n', padx=(15,0))
+
+        self.caldelta_val=tk.Label(calibdata_frame, text="---", bg='ivory',fg='magenta')
+        self.caldelta_val.grid(row = 0, column = 3, sticky = 'n', padx=(0,15))        
         
     def build_macro_frame(self):
         """Builds the macro commands panel."""
@@ -351,12 +356,6 @@ class AsyncScannerApp(tk.Tk):
         self.terminal.insert(tk.END, message + "\n")
         self.terminal.see(tk.END)
         self.terminal.config(state='disabled')
-
-    #todo: Implement on_send_click to dispatch commands to both serial and BLE interfaces.
-    def on_send_click(self):
-        """Dispatches outbound command to both communication systems."""
-        asyncio.create_task(self.send_serial(b"BP:?\n"))
-        asyncio.create_task(self.send_ble(b"BP:?\n"))
         
     async def ble_supervisor_loop(self):
         """Keeps scanning/connecting in the background; never blocks the UI."""
@@ -438,7 +437,7 @@ class AsyncScannerApp(tk.Tk):
 
     async def read_serial_loop(self):
         """Reads characters streaming from the USB serial device."""
-        logging.info(f"[RX-Ser]: self.is_running={self.is_running}ready for data...")
+        logging.info(f"[RX-Ser]: self.is_running={self.is_running}; ready for data...")
         while self.is_running and self.ser_reader:
             
             try:
@@ -501,8 +500,8 @@ class AsyncScannerApp(tk.Tk):
             SQzrlist=decoded_text.split(':')
             
             # if(SQzrlist[0]!='HF'):
-            #     logging.info(f"Received Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
-            #     self.log_to_ui(f"[RX_BLE]: {decoded_text}")
+            # #     logging.info(f"Received Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
+            # #     self.log_to_ui(f"[RX_BLE]: {decoded_text}")
             #     logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
             if SQzrlist[0]=='HF':
                 self.HF_lbl.config(text=decoded_text)
@@ -523,20 +522,39 @@ class AsyncScannerApp(tk.Tk):
             elif SQzrlist[0]=='TR':
                 self.calibtare_lbl.config(text='Tare\n'+SQzrlist[1])
             elif SQzrlist[0]=='CS' or SQzrlist[0]=='CM'or SQzrlist[0]=='CE':
-                if SQzrlist[0]=='CS':
-                    for item in self.table.get_children():
-                        self.table.delete(item)
-                logging.info(f"Received C: command: Sqzrlist: {SQzrlist} decoded_text: {decoded_text}")
-                Sqzrlist1=SQzrlist[1].split(',')
-                logging.info(f"Parsed C command values: {Sqzrlist1}")
-                self.table.insert("",tk.END, values=Sqzrlist1)            
+                self.calprocess(SQzrlist)
             else:
                 self.log_to_ui(f"[RX-BLE]: {decoded_text}")
                 logging.info(f"[RX-BLE]:non-HF data: {decoded_text}")
         except UnicodeDecodeError:
             self.log_to_ui(f"[RX Hex]: {data.hex().upper()}")
-        
-        
+
+
+
+    def calprocess(self, Cal_List: list[str]):
+        """Handles calibration table updates."""
+        # Implement calibration logic here
+        # logging.info(f"Received C: command: Sqzrlist: {Cal_List}")
+        Cal_List1=Cal_List[1].split(',')
+        # logging.info(f"Parsed C command values: {Cal_List1}")
+
+        if Cal_List[0]=='CS':   # Clear the table if the command is 'CS'
+            for item in self.table.get_children():
+                self.table.delete(item)        
+        self.table.insert("",Cal_List1[0], values=Cal_List1)  #otherwise, insert at the specified index
+
+        cal_values = [
+            float(self.table.set(item, "CalVal"))
+            for item in self.table.get_children()
+        ]
+        # logging.info(f'calvalues = {cal_values}')
+        if cal_values:
+            smallest = min(cal_values)
+            largest = max(cal_values)
+            logging.info(f"Min CalValue: {smallest}, MaxCalValue: {largest}")
+            self.caldelta_val.config(text=f"{largest - smallest}")
+
+
     async def send_serial(self, data: bytes ):
         """Sends data the serial device over USB."""
         if self.ser_writer:
