@@ -1,0 +1,143 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     PIGPIO INSTALLATION QUICK START                        ║
+║                      GuiEnv Virtual Environment                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+
+🚀 ONE-LINER INSTALLATION (Recommended)
+══════════════════════════════════════════════════════════════════════════════
+
+bash /home/rpm/GuiEnv/install_pigpio.sh
+
+Done! This installs everything automatically.
+
+
+📋 STEP-BY-STEP (If you prefer manual control)
+══════════════════════════════════════════════════════════════════════════════
+
+# 1. Activate virtual environment
+cd /home/rpm/GuiEnv
+source bin/activate
+
+# 2. Install Python library
+pip install --upgrade pip
+pip install pigpio
+
+# 3. Verify library
+python3 -c "import pigpio; print(pigpio.VERSION)"
+
+# 4. Deactivate
+deactivate
+
+# 5. Install daemon
+sudo apt-get update
+sudo apt-get install -y pigpiod
+
+# 6. Enable and start daemon
+sudo systemctl enable pigpiod
+sudo systemctl start pigpiod
+
+# 7. Verify daemon
+sudo systemctl status pigpiod
+
+
+✅ WHAT GETS INSTALLED
+══════════════════════════════════════════════════════════════════════════════
+
+Component 1: Python Library
+  • Location: venv/lib/python3.13/site-packages/pigpio.py
+  • Install: pip install pigpio
+  • For: Your Python code
+
+Component 2: System Daemon
+  • Location: /usr/bin/pigpiod
+  • Install: sudo apt-get install pigpiod
+  • For: GPIO control service
+
+
+⚡ QUICK VERIFY
+══════════════════════════════════════════════════════════════════════════════
+
+# Activate venv
+cd /home/rpm/GuiEnv && source bin/activate
+
+# Check 1: Python library
+python3 -c "import pigpio; print('✓')" && echo "Library OK"
+
+# Check 2: Daemon running
+ps aux | grep pigpiod | grep -v grep && echo "Daemon OK"
+
+# Check 3: Connection
+python3 -c "import pigpio; pi = pigpio.pi(); print('✓' if pi.connected else '✗'); pi.stop()"
+
+# Deactivate
+deactivate
+
+
+🎯 AFTER INSTALLATION
+══════════════════════════════════════════════════════════════════════════════
+
+Run your application:
+  cd /home/rpm/GuiEnv && source bin/activate
+  python3 BLE_plus_serial.py
+
+Motor control works automatically via GPIO 18 (PWM0 hardware)!
+
+
+🔧 COMMON COMMANDS
+══════════════════════════════════════════════════════════════════════════════
+
+sudo systemctl start pigpiod      # Start daemon
+sudo systemctl stop pigpiod       # Stop daemon
+sudo systemctl status pigpiod     # Check daemon
+sudo systemctl enable pigpiod     # Auto-start on boot
+sudo systemctl disable pigpiod    # Disable auto-start
+sudo journalctl -u pigpiod -n 10  # View daemon logs
+
+
+🆘 TROUBLESHOOTING
+══════════════════════════════════════════════════════════════════════════════
+
+"No module named pigpio"
+  → Activate venv: source bin/activate
+  → Install: pip install pigpio
+
+"Cannot connect to daemon"
+  → Start daemon: sudo systemctl start pigpiod
+  → Or restart: sudo systemctl restart pigpiod
+
+"Permission denied"
+  → Make sure venv is activated first
+  → source bin/activate
+
+"Daemon won't start"
+  → Check if already running: ps aux | grep pigpiod
+  → Check status: sudo systemctl status pigpiod
+  → Restart: sudo systemctl restart pigpiod
+
+
+📁 FILES & DOCUMENTATION
+══════════════════════════════════════════════════════════════════════════════
+
+Main script:
+  install_pigpio.sh               Automated installation
+
+Documentation:
+  PIGPIO_INSTALLATION.md          Complete guide
+  PIGPIO_QUICKSTART.txt           This file
+  QUICK_REFERENCE.md              Motor control reference
+  DOCUMENTATION_INDEX.md          All documentation
+
+Your application:
+  BLE_plus_serial.py              Motor control app (GPIO 18 configured)
+  motor_control_examples.py       10 usage examples
+
+
+═════════════════════════════════════════════════════════════════════════════
+
+                        READY TO GO!
+
+              Method A: bash /home/rpm/GuiEnv/install_pigpio.sh
+              Method B: Follow step-by-step above
+
+═════════════════════════════════════════════════════════════════════════════
