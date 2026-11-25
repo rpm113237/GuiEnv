@@ -17,6 +17,12 @@ except ImportError:
 import os
 os.environ["DISPLAY"] = ":0"
 
+# BTS7960 Motor Driver Setup (Hardware PWM via pigpio)
+try:
+    import pigpio
+except ImportError:
+    pigpio = None
+
 # NUS (Nordic UART Service) UUIDs
 NUS_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 NUS_RX_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"  # Write to BLE device
@@ -25,6 +31,14 @@ NUS_TX_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"  # Read/Notify from BLE dev
 TARGET_DEVICE_NAME = "Squeezer"
 
 SCALE_MAC="10:20:BA:2E:6D:A5"
+
+# BTS7960 Motor Driver Pin Configuration (GPIO BCM numbering)
+# Raspberry Pi 4 Hardware PWM: PWM0 on GPIO 12/18, PWM1 on GPIO 13/19
+# Pin assignments for BTS7960 (adjust based on your wiring)
+BTS7960_IN1 = 23  # GPIO 23 - Control direction (forward)
+BTS7960_IN2 = 24  # GPIO 24 - Control direction (reverse)
+BTS7960_EN = 18   # GPIO 18 - True Hardware PWM0 for speed control (alternative: GPIO 12)
+BTS7960_PWM_FREQ = 1000  # PWM frequency in Hz (true hardware PWM)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 logging.getLogger("asyncio").setLevel(logging.INFO)
@@ -44,7 +58,10 @@ class AsyncScannerApp(tk.Tk):
         self.ser_writer: Optional[asyncio.StreamWriter] = None
         self.ble_client: Optional[BleakClient] = None
         
-        
+        # BTS7960 Motor Driver initialization (pigpio hardware PWM)
+        self.pi = None  # pigpio instance
+        self.motor_enabled = False
+        self.init_motor_driver()
                 
         # mess with styles;
         self.style =ttk.Style(self)
@@ -185,23 +202,23 @@ class AsyncScannerApp(tk.Tk):
         calibhdr_frame = ttk.Frame(calib_frame,relief ='raised',borderwidth=15)        
         calibhdr_frame.pack(fill=tk.X,padx=10, pady=10)
         
-        self.calibstart_lbl=tk.Label(calibhdr_frame, text="Start\n(lbs)", bg='pink',fg='blue')
-        self.calibstart_lbl.pack(side =tk.LEFT)
-        self.calibstart_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 16, "bold"))
-        self.calibstart_ent.insert(0,'10')
-        self.calibstart_ent.pack(side=tk.LEFT, padx=(0,10))
+        self.autocal_start_lbl=tk.Label(calibhdr_frame,font =('Arial',16,'bold'), text="Start\n(lbs)", bg='light green',fg='magenta')
+        self.autocal_start_lbl.pack(side =tk.LEFT)
+        self.autocal_start_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 16, "bold"))
+        self.autocal_start_ent.insert(0,'10')
+        self.autocal_start_ent.pack(side=tk.LEFT, padx=(10))
         
-        self.calibstep_lbl=tk.Label(calibhdr_frame, text="Step\n(lbs)", bg='pink',fg='blue')
-        self.calibstep_lbl.pack(side =tk.LEFT)
-        self.calibstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
-        self.calibstep_ent.insert(0,'20')
-        self.calibstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        self.autocal_step_lbl=tk.Label(calibhdr_frame, font = ('Arial',16, 'bold'), text="Step\n(lbs)", bg='pink',fg='blue')
+        self.autocal_step_lbl.pack(side =tk.LEFT)
+        self.autocal_step_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 16, "bold"))
+        self.autocal_step_ent.insert(0,'20')
+        self.autocal_step_ent.pack(side=tk.LEFT, padx=(0,10))
         
-        self.calibnumstep_lbl=tk.Label(calibhdr_frame, text="Num\nSteps", bg='pink',fg='blue')
-        self.calibnumstep_lbl.pack(side =tk.LEFT)
-        self.calibnumstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
-        self.calibnumstep_ent.insert(0,'6')
-        self.calibnumstep_ent.pack(side=tk.LEFT, padx=(0,10))
+        self.autocal_numstep_lbl=tk.Label(calibhdr_frame, text="Num\nSteps", bg='pink',fg='blue')
+        self.autocal_numstep_lbl.pack(side =tk.LEFT)
+        self.autocal_numstep_ent = tk.Entry(calibhdr_frame, width =5,font=("Helvetica", 11, "bold"))
+        self.autocal_numstep_ent.insert(0,'7')
+        self.autocal_numstep_ent.pack(side=tk.LEFT, padx=(0,10))
         
         self.calibtare_lbl=tk.Label(calibhdr_frame, text="Tare\n----", bg='pink',fg='blue')
         self.calibtare_lbl.pack(side =tk.LEFT)
@@ -212,7 +229,7 @@ class AsyncScannerApp(tk.Tk):
             text=" SP \nCal ",
             # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
             command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))                   
-        self.calib_snglpt_btn.pack(side=tk.RIGHT, padx=5)
+        self.calib_snglpt_btn.pack(side=tk.RIGHT, padx=2)
 
         self.calib_mpstart_btn = ttk.Button(
             calibhdr_frame,
@@ -220,7 +237,7 @@ class AsyncScannerApp(tk.Tk):
             text=" MP \nStart",
             # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
             command = lambda: self.SndMacroCmd('CS:'+f"{self.SFVal:.2f}"))                   
-        self.calib_mpstart_btn.pack(side=tk.RIGHT, padx=5)
+        self.calib_mpstart_btn.pack(side=tk.RIGHT, padx=2)
 
         self.calib_multipt_btn = ttk.Button(
             calibhdr_frame,
@@ -228,7 +245,7 @@ class AsyncScannerApp(tk.Tk):
             text=" MP \nCal ",
             # command=lambda: asyncio.create_task(self.send_ble('C:'+f"{self.SFVal:.2f}"))
             command = lambda: self.SndMacroCmd('CM:'+f"{self.SFVal:.2f}"))                   
-        self.calib_multipt_btn.pack(side=tk.RIGHT, padx=5)
+        self.calib_multipt_btn.pack(side=tk.RIGHT, padx=2)
         
         self.calib_mpend_btn = ttk.Button(
             calibhdr_frame,
@@ -236,15 +253,16 @@ class AsyncScannerApp(tk.Tk):
             text="MP Cal\nEND",
             command=lambda: self.SndMacroCmd('CE:'+f"{self.SFVal:.2f}"),
         )
-        self.calib_mpend_btn.pack(side=tk.RIGHT, padx=5)         
+        self.calib_mpend_btn.pack(side=tk.RIGHT, padx=2)         
 
         self.calib_Auto_btn = ttk.Button(
             calibhdr_frame,
             style="Warning.TButton",
-            text=" Auto \n Cal ",
+            # width=20,
+            text="Auto\nCal ",
             # command = lambda: self.SndMacroCmd('C:'+f"{self.SFVal:.2f}"))   
-            command = lambda: logging.info("Auto Cal triggered"))                
-        self.calib_Auto_btn.pack(side=tk.RIGHT, padx=25)      
+            command = lambda: asyncio.create_task(self.AutoSendLoop()))                
+        self.calib_Auto_btn.pack(side=tk.RIGHT, padx=5)      
         
         calibdata_frame = ttk.LabelFrame(calib_frame, labelanchor = 'n',text = 'calib data',style='Custom.TLabelframe',)        
         calibdata_frame.pack(fill = tk.X, padx=2, pady=2)
@@ -350,6 +368,52 @@ class AsyncScannerApp(tk.Tk):
         )
         self.send_btn.pack(side=tk.RIGHT, padx=5, pady=5)
 
+    async def AutoSendLoop(self):
+        for i in range(int(self.autocal_numstep_ent.get())):
+            start = float(self.autocal_start_ent.get())
+            step = float(self.autocal_step_ent.get())
+            value = start + i * step
+            # command_string = f"SET:{value}"
+            # await self.send_ble(command_string)
+            logging.info(f"AutoSendLoop: Sending value {value}")
+            self.TGT_lbl.config(text=f"TGT:{value}")
+            
+            # Wait until abs(delval) <= 1
+            timeout = 60  # max 60 seconds to wait
+            start_time = asyncio.get_event_loop().time()
+            while True:
+                try:
+                    delval = float(self.SF_lbl.cget("text").split(':')[1])-float(self.TGT_lbl.cget("text").split(':')[1])
+                    logging.info(f"AutoSendLoop: Current delta from SF to TGT {delval}")
+                    
+                    # Control motor based on delval
+                    self.control_motor(delval, max_duty=100.0)
+                    
+                except (IndexError, ValueError):
+                    delval = float('inf')
+                
+                if abs(delval) <= 5 and float(self.HF_lbl.cget("text").split(':')[1]) >= 1:
+                # <= 5 for testing; hard to hit within one manually
+                    logging.info(f"AutoSendLoop: Delta {delval} is within tolerance (<=5)")
+                    # Stop motor when target is reached
+                    self.control_motor(0)
+                    break
+                
+                # Check timeout
+                elapsed = asyncio.get_event_loop().time() - start_time
+                if elapsed > timeout:
+                    logging.warning(f"AutoSendLoop: Timeout waiting for delta to settle (current: {delval})")
+                    # Stop motor on timeout
+                    self.control_motor(0)
+                    break
+                
+                await asyncio.sleep(0.5)  # check delta every 500ms
+            
+            await asyncio.sleep(2)  # delay before next value
+        self.TGT_lbl.config(text="TGT:Done")
+        # Ensure motor is stopped at the end
+        self.control_motor(0)
+    
     def log_to_ui(self, message: str):
         """Thread-safe context logging text to UI panel."""
         self.terminal.config(state='normal')
@@ -534,7 +598,7 @@ class AsyncScannerApp(tk.Tk):
     def calprocess(self, Cal_List: list[str]):
         """Handles calibration table updates."""
         # Implement calibration logic here
-        # logging.info(f"Received C: command: Sqzrlist: {Cal_List}")
+        logging.info(f"Received C: command: Sqzrlist: {Cal_List}")
         Cal_List1=Cal_List[1].split(',')
         # logging.info(f"Parsed C command values: {Cal_List1}")
 
@@ -636,8 +700,105 @@ class AsyncScannerApp(tk.Tk):
                 break  # Window destroyed
             await asyncio.sleep(0.01)
 
+    def init_motor_driver(self):
+        """Initialize BTS7960 motor driver with pigpio hardware PWM."""
+        if pigpio is None:
+            logging.warning("pigpio not available; motor driver disabled")
+            return
+        
+        try:
+            # Connect to pigpio daemon
+            self.pi = pigpio.pi()
+            
+            if not self.pi.connected:
+                logging.warning("pigpio daemon not running; motor driver disabled")
+                self.pi = None
+                return
+            
+            # Setup GPIO pins as outputs
+            self.pi.set_mode(BTS7960_IN1, pigpio.OUTPUT)
+            self.pi.set_mode(BTS7960_IN2, pigpio.OUTPUT)
+            self.pi.set_mode(BTS7960_EN, pigpio.OUTPUT)
+            
+            # Initialize all pins to low
+            self.pi.write(BTS7960_IN1, 0)
+            self.pi.write(BTS7960_IN2, 0)
+            
+            # Initialize hardware PWM on EN pin with 0% duty cycle
+            # pigpio uses 0-1000000 for duty cycle (0-100%)
+            self.pi.hardware_PWM(BTS7960_EN, BTS7960_PWM_FREQ, 0)
+            
+            self.motor_enabled = True
+            logging.info("BTS7960 motor driver initialized successfully (pigpio hardware PWM)")
+        except Exception as e:
+            logging.error(f"Failed to initialize motor driver: {e}")
+            self.motor_enabled = False
+            if self.pi:
+                self.pi.stop()
+                self.pi = None
+
+    def control_motor(self, delval: float, max_duty: float = 100.0):
+        """
+        Control motor speed and direction based on delta value using hardware PWM.
+        
+        Args:
+            delval: The delta value (SF - TGT). Positive = forward, Negative = reverse
+            max_duty: Maximum PWM duty cycle (0-100)
+        """
+        if not self.motor_enabled or self.pi is None:
+            return
+        
+        try:
+            # Map delval to motor speed
+            # Adjust sensitivity factor as needed for your application
+            sensitivity = 10.0  # delval units per 1% duty cycle
+            speed_percent = min(abs(delval) / sensitivity * 100, max_duty)
+            
+            # Convert percentage to pigpio duty cycle (0-1000000)
+            pwm_duty = int(speed_percent * 10000)
+            
+            if delval > 0:  # Forward
+                self.pi.write(BTS7960_IN1, 1)
+                self.pi.write(BTS7960_IN2, 0)
+                logging.debug(f"Motor forward at {speed_percent:.1f}% duty (delval={delval:.2f})")
+            elif delval < 0:  # Reverse
+                self.pi.write(BTS7960_IN1, 0)
+                self.pi.write(BTS7960_IN2, 1)
+                logging.debug(f"Motor reverse at {speed_percent:.1f}% duty (delval={delval:.2f})")
+            else:  # Stop
+                self.pi.write(BTS7960_IN1, 0)
+                self.pi.write(BTS7960_IN2, 0)
+                pwm_duty = 0
+                logging.debug("Motor stopped (delval=0)")
+            
+            # Set hardware PWM duty cycle
+            self.pi.hardware_PWM(BTS7960_EN, BTS7960_PWM_FREQ, pwm_duty)
+            
+        except Exception as e:
+            logging.error(f"Error controlling motor: {e}")
+
+    def stop_motor(self):
+        """Stop the motor and cleanup pigpio."""
+        if not self.motor_enabled or self.pi is None:
+            return
+        
+        try:
+            # Stop PWM and set pins to low
+            self.pi.hardware_PWM(BTS7960_EN, BTS7960_PWM_FREQ, 0)
+            self.pi.write(BTS7960_IN1, 0)
+            self.pi.write(BTS7960_IN2, 0)
+            
+            # Disconnect from pigpio daemon
+            self.pi.stop()
+            self.pi = None
+            
+            logging.info("Motor stopped and pigpio cleaned up")
+        except Exception as e:
+            logging.error(f"Error stopping motor: {e}")
+
     def close_app(self):
         """Enforces clean execution teardowns."""
+        self.stop_motor()
         self.is_running = False
         self.destroy()
 
