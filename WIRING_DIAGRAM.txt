@@ -1,0 +1,245 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                     BTS7960 MOTOR DRIVER WIRING DIAGRAM                        ║
+║                   Raspberry Pi 4 - Hardware PWM Configuration                  ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           RASPBERRY PI SIDE                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────┐                             │
+│  │      Raspberry Pi GPIO Header              │                             │
+│  │                                            │                             │
+│  │  GPIO 23 (Pin 16) ───────────┐             │                             │
+│  │  GPIO 24 (Pin 18) ───────────┤──→ IN1, IN2 │                             │
+│  │  GPIO 18 (Pin 12) ───────────┤──→ EN(PWM0) │  ← True Hardware PWM        │
+│  │  GND (Pin 6)      ───────────┘──→ GND      │                             │
+│  │                                            │                             │
+│  │  +5V (Pin 2 or 4) ──────────────────┐      │                             │
+│  │                                     │      │                             │
+│  │  NOTE: GPIO 18 is PWM0 (hardware)   │      │                             │
+│  │        Alternative: GPIO 12 (PWM0)  │      │                             │
+│  │        Or use GPIO 13/19 for PWM1   │      │                             │
+│  └────────────────────────────────────────────┘                             │
+│                                       │                                      │
+│                                       │                                      │
+└───────────────────────────────────────┼──────────────────────────────────────┘
+                                        │
+                                        └───── Optional: Power for BTS7960
+                                               (if not powered externally)
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        BTS7960 MOTOR DRIVER SIDE                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────┐                             │
+│  │       BTS7960 Motor Driver Module          │                             │
+│  │                                            │                             │
+│  │  Input Side:                               │                             │
+│  │  ┌──────────────────────────────────────┐  │                             │
+│  │  │ IN1  ← GPIO 23 (Direction 1)        │  │                             │
+│  │  │ IN2  ← GPIO 24 (Direction 2)        │  │                             │
+│  │  │ EN   ← GPIO 18 (PWM0 Speed Control) │  │                             │
+│  │  │ GND  ← Raspberry Pi GND             │  │                             │
+│  │  │ +5V  ← External Power Supply        │  │                             │
+│  │  └──────────────────────────────────────┘  │                             │
+│  │                                            │                             │
+│  │  Output Side:                              │                             │
+│  │  ┌──────────────────────────────────────┐  │                             │
+│  │  │ OUT1 → Motor Terminal 1 (+)         │  │                             │
+│  │  │ OUT2 → Motor Terminal 2 (-)         │  │                             │
+│  │  └──────────────────────────────────────┘  │                             │
+│  │                                            │                             │
+│  │  GND  ← External Power Supply Common      │                             │
+│  │                                            │                             │
+│  └────────────────────────────────────────────┘                             │
+│           │                        │                                        │
+└───────────┼────────────────────────┼────────────────────────────────────────┘
+            │                        │
+            │                    ┌───┴────┐
+            │                    │  MOTOR │
+            │                    └───┬────┘
+            │                        │
+        ┌───┴────┐              ┌────┴────┐
+        │ Power  │              │  External│
+        │ Supply │              │ Fuse/   │
+        │+12V/5V │              │ Relay   │
+        └───┬────┘              │(Optional)│
+            │                    └────┬────┘
+            └────────┬─────────────────┘
+                     │
+                   GND/COM
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                           PIN SIGNAL TRUTH TABLE                               ║
+╠═════════════════╦═════════════╦═════════════╦════════════════════════════════╣
+║   Direction     ║    IN1      ║    IN2      ║   Motor Behavior               ║
+╠═════════════════╬═════════════╬═════════════╬════════════════════════════════╣
+║   FORWARD       ║   HIGH (1)  ║   LOW (0)   ║   Motor runs forward           ║
+║   REVERSE       ║   LOW (0)   ║   HIGH (1)  ║   Motor runs backward/reverse  ║
+║   STOP/COAST    ║   LOW (0)   ║   LOW (0)   ║   Motor coasts to stop         ║
+║   BRAKE/LOCK    ║   HIGH (1)  ║   HIGH (1)  ║   Motor shorts/locks           ║
+╚═════════════════╩═════════════╩═════════════╩════════════════════════════════╝
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                      PWM DUTY CYCLE SPEED CONTROL                              ║
+╠═════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                 ║
+║  EN Pin PWM Duty Cycle:                                                         ║
+║                                                                                 ║
+║   0%  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   Motor OFF (no power)              ║
+║                                                                                 ║
+║  20%  ┌─┐           ┌─┐           ┌─┐       Motor ~20% speed                 ║
+║      ─┘ └───────────┘ └───────────┘ └─      (PWM Waveform)                   ║
+║                                                                                 ║
+║  50%  ┌─────┐       ┌─────┐       ┌─────┐  Motor ~50% speed                  ║
+║      ─┘     └───────┘     └───────┘     └─                                    ║
+║                                                                                 ║
+║  80%  ┌───────────┐ ┌───────────┐ ┌──────   Motor ~80% speed                 ║
+║      ─┘           └─┘           └─┘  └──    (mostly on)                      ║
+║                                                                                 ║
+║ 100%  ───────────────────────────────────   Motor MAX speed (fully on)        ║
+║                                                                                 ║
+║ NOTE: Actual motor response depends on motor specifications and load          ║
+║                                                                                 ║
+╚═════════════════════════════════════════════════════════════════════════════════╝
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                     PHYSICAL WIRING CONNECTION GUIDE                            ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                 ║
+║  1. CONTROL SIGNALS (Raspberry Pi → BTS7960)                                   ║
+║     ┌──────────────┬────────────┬──────────────────────────────────┐           ║
+║     │ Raspberry Pi │ BTS7960    │ Wire Color                       │           ║
+║     ├──────────────┼────────────┼──────────────────────────────────┤           ║
+║     │ GPIO 23      │ IN1        │ Green or Yellow                  │           ║
+║     │ GPIO 24      │ IN2        │ Green or Blue                    │           ║
+║     │ GPIO 25      │ EN         │ White or Gray                    │           ║
+║     │ GND          │ GND        │ Black (Common Ground)            │           ║
+║     └──────────────┴────────────┴──────────────────────────────────┘           ║
+║                                                                                 ║
+║  2. POWER CONNECTION (External Power Supply)                                   ║
+║     ┌───────────────┬────────────┬──────────────────────────────────┐          ║
+║     │ Power Supply  │ BTS7960    │ Wire Gauge (Amperage)           │          ║
+║     ├───────────────┼────────────┼──────────────────────────────────┤          ║
+║     │ +12V/+5V      │ +5V In     │ Red (16-20 AWG for ≤5A)         │          ║
+║     │ GND/COM       │ GND        │ Black (16-20 AWG for ≤5A)       │          ║
+║     │ Fuse (10-20A) │ Inline    │ 1A-2A per motor amperage        │          ║
+║     └───────────────┴────────────┴──────────────────────────────────┘          ║
+║                                                                                 ║
+║  3. MOTOR CONNECTION (BTS7960 → DC Motor)                                      ║
+║     ┌─────────────┬────────────┬──────────────────────────────────┐            ║
+║     │ BTS7960     │ Motor      │ Note                             │            ║
+║     ├─────────────┼────────────┼──────────────────────────────────┤            ║
+║     │ OUT1        │ Terminal+  │ Thicker wire if high current     │            ║
+║     │ OUT2        │ Terminal-  │ (match motor amperage rating)    │            ║
+║     │ GND         │ Case/Shield│ Optional shielding for EMI       │            ║
+║     └─────────────┴────────────┴──────────────────────────────────┘            ║
+║                                                                                 ║
+║  WIRING TIPS:                                                                   ║
+║  • Keep control signal wires (GPIO) short and together                         ║
+║  • Use separate twisted pair for each GPIO signal                              ║
+║  • Keep power wires separate from signal wires (minimize EMI)                  ║
+║  • Use ferrite clamps around signal cables if getting interference              ║
+║  • Double-check polarity before connecting power                               ║
+║  • Use quality connectors to prevent loose connections                         ║
+║                                                                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                          TYPICAL APPLICATION FLOW                              ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                 ║
+║   START APPLICATION                                                             ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   ┌─────────────────────────┐                                                  ║
+║   │ init_motor_driver()     │                                                  ║
+║   │ Setup GPIO pins         │                                                  ║
+║   │ Initialize PWM          │                                                  ║
+║   └─────────────────────────┘                                                  ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   WAIT FOR USER INPUT (AutoCal)                                                ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   ┌─────────────────────────┐                                                  ║
+║   │ AutoSendLoop() START    │                                                  ║
+║   └─────────────────────────┘                                                  ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   LOOP: Get delval (SF - TGT)                                                  ║
+║        │                                                                        ║
+║        ├→ ┌──────────────────────┐                                             ║
+║        │  │ control_motor(delval)│                                             ║
+║        │  │ Set IN1/IN2 direction│                                             ║
+║        │  │ Set EN duty cycle    │                                             ║
+║        │  └──────────────────────┘                                             ║
+║        │       ↓ Motor responds ↓                                              ║
+║        │                                                                        ║
+║        └→ Check if |delval| ≤ 5 lbs                                           ║
+║             │                                                                   ║
+║             YES → ┌──────────────────────┐                                     ║
+║                   │ control_motor(0)     │                                     ║
+║                   │ STOP MOTOR           │                                     ║
+║                   └──────────────────────┘                                     ║
+║                        │                                                        ║
+║                        ↓                                                        ║
+║                   NEXT STEP or END                                             ║
+║                                                                                 ║
+║             NO → Wait 500ms, repeat loop                                       ║
+║                  or timeout after 60s                                          ║
+║                                                                                 ║
+║   APPLICATION EXIT                                                              ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   ┌─────────────────────────┐                                                  ║
+║   │ close_app()             │                                                  ║
+║   │ stop_motor()            │                                                  ║
+║   │ GPIO.cleanup()          │                                                  ║
+║   └─────────────────────────┘                                                  ║
+║        │                                                                        ║
+║        ↓                                                                        ║
+║   END                                                                            ║
+║                                                                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+MOTORCONTROL SIGNAL SEQUENCE EXAMPLE:
+══════════════════════════════════════
+
+Time  Sensor(SF)  Target(TGT)  Delta(SF-TGT)  Action           Motor Speed
+─────  ──────────  ──────────  ─────────────  ──────────────── ─────────────
+0s     45.0        50.0        -5.0           Reverse active   50%
+1s     46.0        50.0        -4.0           Reverse          40%
+2s     47.0        50.0        -3.0           Reverse          30%
+3s     48.0        50.0        -2.0           Reverse          20%
+4s     49.0        50.0        -1.0           Reverse          10%
+5s     49.8        50.0        -0.2           Reverse (slow)   2%
+6s     50.1        50.0        +0.1           Forward (slow)   1%
+7s     50.0        50.0        0.0            STOP             0% (Motor Off)
+8s     50.0        50.0        0.0            Idle             OFF
+
+Sensor reading moves from 45 toward target of 50.
+Motor runs in reverse to increase sensor value.
+When delta is within tolerance (±5), motor stops.
+Application proceeds to next calibration step.
+
+
+FORMAT QUICK REFERENCE:
+══════════════════════════════════════════════════════════════════════════════════
+GPIO Signal Levels:  HIGH = 1 = 3.3V  |  LOW = 0 = 0V
+PWM Duty Cycle:      0-100%  (0-100% power delivery)
+Frequency:           1000 Hz (1000 cycles per second)
+Motor Response:      Direction changes in ~1-2ms
+                     Speed changes in ~1-5ms (depends on motor inertia)
+Sensor Read Interval: 500ms (every half second during AutoSendLoop)
+Timeout:             60 seconds maximum wait per calibration step
+
+═══════════════════════════════════════════════════════════════════════════════════
