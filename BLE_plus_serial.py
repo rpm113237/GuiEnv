@@ -17,7 +17,7 @@ except ImportError:
 import os
 os.environ["DISPLAY"] = ":0"
 
-# BTS7960 Motor Driver Setup (Hardware PWM via pigpio)/home/rpm/GuiEnv/bin/python
+# BTS7960 Motor Driver Setup (Hardware PWM via pigpio)
 try:
     import pigpio
 except ImportError:
